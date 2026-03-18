@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KARDEX JD</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <header>
+        <h1>KARDEX JD</h1>
+    </header>
+    
+    <nav>
+        <a href="/">Inicio</a>
+        <a href="/reporte">Reportes</a>
+        <a href="/inventario">Inventario</a>
+        <a href="/admin">Admin</a>
+    </nav>
+
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

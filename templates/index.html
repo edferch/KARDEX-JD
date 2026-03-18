@@ -1,0 +1,167 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div style="padding: 15px; margin-bottom: 20px; border-radius: 5px; text-align: center; font-weight: bold;
+            {% if category == 'error' %} background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;
+            {% else %} background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; {% endif %}">
+            {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    
+    <div style="margin: 20px 0; display: flex; gap: 15px;">
+        <button onclick="abrirModalMovimiento('modalEntrada')" class="btn btn-entrada" style="flex: 1; font-size: 16px;">+ Registrar Entrada / Compra</button>
+        <button onclick="abrirModalMovimiento('modalSalida')" class="btn btn-salida" style="flex: 1; font-size: 16px;">- Registrar Salida / Egreso</button>
+        <a href="/exportar_kardex" class="btn" style="background-color: #10b981; padding: 12px 24px; display: flex; align-items: center;">📥 Descargar Kardex</a>
+    </div>
+
+    <div class="kardex-tabla-contenedor">
+        <table class="kardex-tabla">
+            <thead>
+                <tr>
+                    <th colspan="3" class="hdr-gris">Material</th>
+                    <th colspan="3" class="hdr-amarillo">Inicial</th>
+                    <th colspan="3" class="hdr-verde">Entradas</th>
+                    <th colspan="3" class="hdr-azul">Salidas</th>
+                    <th colspan="3" class="hdr-naranja">Actual</th>
+                </tr>
+                <tr>
+                    <th class="hdr-gris col-texto">No.</th>
+                    <th class="hdr-gris col-texto">Nombre</th>
+                    <th class="hdr-gris col-texto">Grupo</th>
+                    
+                    <th class="hdr-amarillo">Cant.</th>
+                    <th class="hdr-amarillo">Costo</th>
+                    <th class="hdr-amarillo">Total</th>
+                    
+                    <th class="hdr-verde">Cant.</th>
+                    <th class="hdr-verde">Costo</th>
+                    <th class="hdr-verde">Total</th>
+                    
+                    <th class="hdr-azul">Cant.</th>
+                    <th class="hdr-azul">Costo</th>
+                    <th class="hdr-azul">Total</th>
+                    
+                    <th class="hdr-naranja">Cant.</th>
+                    <th class="hdr-naranja">Prom.</th>
+                    <th class="hdr-naranja">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for mat in materiales %}
+                <tr>
+                    <td class="col-texto">{{ loop.index }}</td>
+                    <td class="col-texto"><strong>{{ mat['nombre'] }}</strong></td>
+                    <td class="col-texto">{{ mat['tipo_material'] }}</td>
+                    
+                    <td class="celda-amarilla">{{ mat['ini_cant'] }}</td>
+                    <td class="celda-amarilla">Q {{ "%.2f"|format(mat['ini_costo']) }}</td>
+                    <td class="celda-amarilla">Q {{ "%.2f"|format(mat['ini_total']) }}</td>
+                    
+                    <td class="celda-verde">{{ mat['ing_cant'] }}</td>
+                    <td class="celda-verde">Q {{ "%.2f"|format(mat['ing_costo']) }}</td> 
+                    <td class="celda-verde">Q {{ "%.2f"|format(mat['ing_total']) }}</td>
+                    
+                    <td class="celda-azul">{{ mat['sal_cant'] }}</td>
+                    <td class="celda-azul">Q {{ "%.2f"|format(mat['sal_costo']) }}</td>
+                    <td class="celda-azul">Q {{ "%.2f"|format(mat['sal_total']) }}</td>
+                    
+                    {% set stock = mat['fin_cant'] %}
+                    {% if stock >= 5 %}
+                        <td class="celda-naranja alerta-verde">{{ stock }}</td>
+                    {% elif stock >= 2 %}
+                        <td class="celda-naranja alerta-amarilla">{{ stock }}</td>
+                    {% else %}
+                        <td class="celda-naranja alerta-roja">{{ stock }}</td>
+                    {% endif %}
+                    
+                    <td class="celda-naranja">Q {{ "%.2f"|format(mat['fin_costo']) }}</td>
+                    <td class="celda-naranja">Q {{ "%.2f"|format(mat['fin_total']) }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="15" style="padding: 20px; text-align: center; color: #7f8c8d;">No hay materiales registrados.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="overlay" id="fondoOscuro" onclick="cerrarModal('modalEntrada'); cerrarModal('modalSalida')"></div>
+
+    <div class="modal" id="modalEntrada">
+        <h3 style="color: #27ae60; margin-top: 0;">Nueva Entrada</h3>
+        <form method="POST" action="/agregar_entrada" autocomplete="off">
+            <input type="hidden" name="origen" value="index">
+            <div class="form-grupo">
+                <label>Seleccionar Material:</label>
+                <select name="material_id" required>
+                    {% for mat in materiales %}
+                    <option value="{{ mat['id'] }}">{{ mat['nombre'] }} ({{ mat['tipo_material'] }})</option>
+                    {% endfor %}
+                </select>
+                <label>Fecha de Movimiento:</label>
+                <input type="date" name="fecha" id="fechaEntrada" required>
+                <label>Tipo de Documento:</label>
+                <input type="text" name="documento" required>
+                <label>Número de Documento:</label>
+                <input type="text" name="numero_documento" required>
+                <label>Cantidad:</label>
+                <input type="number" name="cantidad" required>
+                <label>Costo de compra (Q):</label>
+                <input type="number" step="0.01" name="precio" required>
+            </div>
+            <div class="modal-acciones">
+                <button type="button" class="btn btn-secundario" onclick="cerrarModal('modalEntrada')">Cancelar</button>
+                <button type="submit" class="btn btn-entrada">Guardar Entrada</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="modal" id="modalSalida">
+        <h3 style="color: #e74c3c; margin-top: 0;">Nueva Salida</h3>
+        <form method="POST" action="/agregar_salida" autocomplete="off">
+            <input type="hidden" name="origen" value="index">
+            <div class="form-grupo">
+                <label>Seleccionar Material:</label>
+                <select name="material_id" required>
+                    {% for mat in materiales %}
+                    <option value="{{ mat['id'] }}">{{ mat['nombre'] }} ({{ mat['tipo_material'] }})</option>
+                    {% endfor %}
+                </select>
+                <label>Fecha de Movimiento:</label>
+                <input type="date" name="fecha" id="fechaSalida" required>
+                <label>Tipo de Documento:</label>
+                <input type="text" name="documento" required>
+                <label>Número de Documento:</label>
+                <input type="text" name="numero_documento" required>
+                <label>Cantidad a extraer (Unidades):</label>
+                <input type="number" name="cantidad" required>
+            </div>
+            <div class="modal-acciones">
+                <button type="button" class="btn btn-secundario" onclick="cerrarModal('modalSalida')">Cancelar</button>
+                <button type="submit" class="btn btn-salida">Guardar Salida</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        function abrirModalMovimiento(modalId) {
+            document.getElementById(modalId).style.display = 'block';
+            document.getElementById("fondoOscuro").classList.add("activo");
+        }
+        function cerrarModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+            document.getElementById("fondoOscuro").classList.remove("activo");
+        }
+
+        // Poner la fecha actual por defecto en los modales
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('fechaEntrada').value = today;
+        document.getElementById('fechaSalida').value = today;
+    </script>
+{% endblock %}

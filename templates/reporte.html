@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h2>Reportes</h2>
+    
+    <div class="card" style="margin-bottom: 25px; padding: 20px;">
+        <form method="GET" action="/reporte" style="display: flex; gap: 15px; align-items: flex-end;" autocomplete="off">
+            <div class="form-grupo" style="flex: 1; margin-bottom: 0;">
+                <label>Producto / Material:</label>
+                <select name="material_id" required onchange="this.form.submit()">
+                    <option value="">-- Seleccione un producto --</option>
+                    {% for mat in materiales %}
+                        <option value="{{ mat['id'] }}" {% if selected_material_id == mat['id'] %}selected{% endif %}>
+                            {{ mat['nombre'] }} - ({{ mat['tipo_material'] }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+
+    {% if reporte_datos %}
+    <div style="background-color: white; border-radius: 12px; padding: 25px; margin-bottom: 30px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
+        <h3 style="color: #1e293b; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; margin-top: 0; font-size: 20px;">
+            📦 {{ reporte_datos.material['nombre'] }} <span style="font-size: 14px; color: #64748b; font-weight: normal;">| Grupo: {{ reporte_datos.material['tipo_material'] }} | Unidad: {{ reporte_datos.material['unidad'] }}</span>
+        </h3>
+        
+        <div class="kardex-tabla-contenedor">
+            <table class="kardex-tabla" style="min-width: 900px;">
+                <thead>
+                    <tr>
+                        <th colspan="2" class="hdr-gris">Documento</th>
+                        <th colspan="3" class="hdr-verde">ENTRADAS</th>
+                        <th colspan="3" class="hdr-azul">SALIDAS</th>
+                        <th colspan="3" class="hdr-naranja">SALDOS</th>
+                    </tr>
+                    <tr>
+                        <th class="hdr-gris col-texto">Fecha</th>
+                        <th class="hdr-gris col-texto">Detalle</th>
+                        
+                        <th class="hdr-verde">Cant.</th>
+                        <th class="hdr-verde">Costo U.</th>
+                        <th class="hdr-verde">Total (Q)</th>
+                        
+                        <th class="hdr-azul">Cant.</th>
+                        <th class="hdr-azul">Costo U.</th>
+                        <th class="hdr-azul">Total (Q)</th>
+                        
+                        <th class="hdr-naranja">Cant.</th>
+                        <th class="hdr-naranja">Costo Prom.</th>
+                        <th class="hdr-naranja">Total (Q)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for fila in reporte_datos.filas %}
+                    <tr>
+                        <td class="col-texto" style="white-space: nowrap;">{{ fila['fecha'] }}</td>
+                        <td class="col-texto"><strong>{{ fila['detalle'] }}</strong></td>
+                        
+                        <td class="celda-verde">{% if fila['ing_cant'] != '' %}{{ fila['ing_cant'] }}{% endif %}</td>
+                        <td class="celda-verde">{% if fila['ing_costo'] != '' %}Q {{ "%.2f"|format(fila['ing_costo']) }}{% endif %}</td>
+                        <td class="celda-verde">{% if fila['ing_total'] != '' %}Q {{ "%.2f"|format(fila['ing_total']) }}{% endif %}</td>
+                        
+                        <td class="celda-azul">{% if fila['sal_cant'] != '' %}{{ fila['sal_cant'] }}{% endif %}</td>
+                        <td class="celda-azul">{% if fila['sal_costo'] != '' %}Q {{ "%.2f"|format(fila['sal_costo']) }}{% endif %}</td>
+                        <td class="celda-azul">{% if fila['sal_total'] != '' %}Q {{ "%.2f"|format(fila['sal_total']) }}{% endif %}</td>
+                        
+                        <td class="celda-naranja" style="font-weight: bold;">{{ fila['saldo_cant'] }}</td>
+                        <td class="celda-naranja">Q {{ "%.2f"|format(fila['saldo_costo']) }}</td>
+                        <td class="celda-naranja" style="font-weight: bold;">Q {{ "%.2f"|format(fila['saldo_total']) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    {% else %}
+        {% if selected_material_id %}
+            <div style="padding: 20px; text-align: center; color: #b91c1c; background: #fee2e2; border-radius: 8px; font-weight: bold;">
+                Material no encontrado en la base de datos.
+            </div>
+        {% else %}
+            <div style="padding: 50px 20px; text-align: center; color: #64748b; border: 2px dashed #cbd5e1; border-radius: 12px; background-color: #f8fafc;">
+                <span style="font-size: 24px;">👆</span><br><br>
+                Selecciona un producto en el menú desplegable para visualizar su registro automáticamente.
+            </div>
+        {% endif %}
+    {% endif %}
+{% endblock %}

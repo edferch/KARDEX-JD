@@ -1,0 +1,214 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h2>Inventario</h2>
+        <div style="display: flex; gap: 10px;">
+            <a href="/exportar_inventario" class="btn" style="background-color: #10b981;">📥 Descargar Excel</a>
+            <button onclick="abrirPanel()" class="btn">+ Agregar Material</button>
+        </div>
+    </div>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div style="padding: 15px; margin-bottom: 20px; border-radius: 8px; text-align: center; font-weight: bold;
+            {% if category == 'error' %} background-color: #fecaca; color: #991b1b; border: 1px solid #f87171;
+            {% else %} background-color: #d1fae5; color: #065f46; border: 1px solid #34d399; {% endif %}">
+            {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <div class="kardex-tabla-contenedor">
+        <table class="kardex-tabla">
+            <thead>
+                <tr>
+                    <th class="hdr-gris col-texto">No.</th>
+                    <th class="hdr-gris col-texto">Nombre</th>
+                    <th class="hdr-gris col-texto">Grupo</th>
+                    <th class="hdr-gris col-texto">No. Métrico</th>
+                    <th class="hdr-gris col-texto">Origen</th>
+                    <th class="hdr-gris col-texto">Fuente</th>
+                    <th class="hdr-gris col-texto">Proveedor</th>
+                    <th class="hdr-gris col-texto">Presentación</th>
+                    <th class="hdr-gris col-texto">Unidad</th>
+                    <th class="hdr-gris">Exist. Inicial</th>
+                    <th class="hdr-gris">Costo Inicial</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for mat in materiales %}
+                <tr>
+                    <td class="col-texto">{{ loop.index }}</td>
+                    <td class="col-texto"><strong>{{ mat['nombre'] }}</strong></td>
+                    <td class="col-texto">{{ mat['tipo_material'] }}</td>
+                    <td class="col-texto">{{ mat['numero_metrico'] }}</td>
+                    <td class="col-texto">{{ mat['origen'] }}</td>
+                    <td class="col-texto">{{ mat['fuente'] }}</td>
+                    <td class="col-texto">{{ mat['empresa'] }}</td>
+                    <td class="col-texto">{{ mat['presentacion'] }}</td>
+                    <td class="col-texto">{{ mat['unidad'] }}</td>
+                    <td>{{ mat['cantidad_inicial'] }}</td>
+                    <td>Q {{ "%.2f"|format(mat['precio_unitario']) }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="10" style="padding: 20px; text-align: center; color: #7f8c8d;">No hay materiales registrados en el inventario.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="overlay" id="fondoOscuro" onclick="cerrarPanel()"></div>
+    
+    <div class="panel-lateral" id="miPanel">
+        <h3 style="margin-top: 0; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; color: #1e293b;">Nuevo Material</h3>
+        <form method="POST" action="/inventario" autocomplete="off">
+            <div class="form-grupo">
+                <label>Nombre:</label> <input type="text" name="nombre" required>
+                
+                <label>Grupo (Categoría):</label> 
+                <div style="display: flex; gap: 8px;">
+                    <select name="tipo_material" id="selectGrupo" required style="flex: 1;"> 
+                        <option value="">Seleccione un grupo...</option>
+                        {% for grupo in grupos %} <option value="{{ grupo['nombre'] }}">{{ grupo['nombre'] }}</option> {% endfor %} 
+                    </select>
+                    <button type="button" class="btn" onclick="abrirModalGrupo()" style="padding: 0 15px; margin: 0; box-shadow: none;" title="Agregar grupo rápido">+</button>
+                </div>
+
+                <label>Fuente (Quién paga):</label>
+                <select name="fuente" required>
+                    <option value="">Seleccione una fuente...</option>
+                    {% for f in fuentes %} <option value="{{ f['nombre'] }}">{{ f['nombre'] }}</option> {% endfor %}
+                </select>
+
+                <label>Empresa Proveedora:</label> 
+                <div style="display: flex; gap: 8px;">
+                    <select name="empresa" id="selectProveedor" required style="flex: 1;"> 
+                        <option value="">Seleccione un proveedor...</option>
+                        {% for prov in proveedores %} <option value="{{ prov['nombre'] }}">{{ prov['nombre'] }} (ID: {{ prov['id'] }})</option> {% endfor %} 
+                    </select>
+                    <button type="button" class="btn btn-entrada" onclick="abrirModalProveedor()" style="padding: 0 15px; margin: 0; box-shadow: none;" title="Agregar proveedor rápido">+</button>
+                </div>
+
+                <label>No. Métrico:</label> <input type="text" name="numero_metrico">
+                <label>Origen:</label> <input type="text" name="origen">
+                <label>Presentación:</label> <input type="text" name="presentacion">
+                <label>Unidad de Medida:</label> <input type="text" name="unidad">
+                <label>Existencia Inicial Física:</label> <input type="number" name="cantidad_inicial" required>
+                <label>Costo Unitario Inicial (Q):</label> <input type="number" step="0.01" name="precio_unitario" required>
+            </div>
+            <div class="modal-acciones">
+                <button type="button" class="btn btn-secundario" onclick="cerrarPanel()">Cancelar</button>
+                <button type="submit" class="btn">Guardar Material</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Modales Secundarios y Overlay Secundario para que aparezcan encima del panel -->
+    <div class="overlay" id="overlaySecundario" onclick="cerrarModalesSecundarios()" style="z-index: 1050;"></div>
+    
+    <div class="modal" id="modalGrupo" style="z-index: 1100;">
+        <h3 style="color: #3b82f6; margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">Añadir Nuevo Grupo</h3>
+        <div class="form-grupo">
+            <label>Nombre del Grupo:</label>
+            <input type="text" id="nuevoNombreGrupo" autocomplete="off">
+        </div>
+        <div class="modal-acciones">
+            <button type="button" class="btn btn-secundario" onclick="cerrarModalesSecundarios()">Cancelar</button>
+            <button type="button" class="btn" onclick="guardarGrupoAjax()">Guardar</button>
+        </div>
+    </div>
+
+    <div class="modal" id="modalProveedor" style="z-index: 1100;">
+        <h3 style="color: #10b981; margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">Añadir Nuevo Proveedor</h3>
+        <div class="form-grupo">
+            <label>NIT:</label>
+            <input type="text" id="nuevoNitProveedor" autocomplete="off">
+            <label>Nombre del Proveedor:</label>
+            <input type="text" id="nuevoNombreProveedor" autocomplete="off">
+        </div>
+        <div class="modal-acciones">
+            <button type="button" class="btn btn-secundario" onclick="cerrarModalesSecundarios()">Cancelar</button>
+            <button type="button" class="btn btn-entrada" onclick="guardarProveedorAjax()">Guardar</button>
+        </div>
+    </div>
+
+    <script>
+        function abrirPanel() { document.getElementById("miPanel").classList.add("abierto"); document.getElementById("fondoOscuro").classList.add("activo"); }
+        function cerrarPanel() { document.getElementById("miPanel").classList.remove("abierto"); document.getElementById("fondoOscuro").classList.remove("activo"); }
+        
+        function abrirModalGrupo() {
+            document.getElementById("modalGrupo").style.display = 'block';
+            document.getElementById("overlaySecundario").classList.add("activo");
+            document.getElementById("nuevoNombreGrupo").focus();
+        }
+        
+        function abrirModalProveedor() {
+            document.getElementById("modalProveedor").style.display = 'block';
+            document.getElementById("overlaySecundario").classList.add("activo");
+            document.getElementById("nuevoNitProveedor").focus();
+        }
+
+        function cerrarModalesSecundarios() {
+            document.getElementById("modalGrupo").style.display = 'none';
+            document.getElementById("modalProveedor").style.display = 'none';
+            document.getElementById("overlaySecundario").classList.remove("activo");
+            document.getElementById("nuevoNombreGrupo").value = '';
+            document.getElementById("nuevoNitProveedor").value = '';
+            document.getElementById("nuevoNombreProveedor").value = '';
+        }
+
+        async function guardarGrupoAjax() {
+            const nombre = document.getElementById("nuevoNombreGrupo").value.trim();
+            if (!nombre) { alert("El nombre del grupo es obligatorio."); return; }
+            
+            try {
+                const response = await fetch('/agregar_grupo_ajax', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nombre: nombre })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    const select = document.getElementById('selectGrupo');
+                    select.options.add(new Option(data.nombre, data.nombre, false, true));
+                    cerrarModalesSecundarios();
+                } else {
+                    alert("❌ Error: " + data.error);
+                }
+            } catch (e) {
+                alert("Error de conexión al guardar el grupo.");
+            }
+        }
+
+        async function guardarProveedorAjax() {
+            const nit = document.getElementById("nuevoNitProveedor").value.trim();
+            const nombre = document.getElementById("nuevoNombreProveedor").value.trim();
+            if (!nombre) { alert("El nombre del proveedor es obligatorio."); return; }
+
+            try {
+                const response = await fetch('/agregar_proveedor_ajax', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nit: nit, nombre: nombre })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    const select = document.getElementById('selectProveedor');
+                    select.options.add(new Option(`${data.nombre} (ID: ${data.id})`, data.nombre, false, true));
+                    cerrarModalesSecundarios();
+                } else {
+                    alert("❌ Error: " + data.error);
+                }
+            } catch (e) {
+                alert("Error de conexión al guardar el proveedor.");
+            }
+        }
+    </script>
+{% endblock %}
