@@ -454,8 +454,13 @@ def exportar_kardex():
     materiales = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
     
     wb = Workbook()
-    ws = wb.active
-    ws.title = "Kardex"
+    
+    # Hoja 1: Resumen
+    ws_resumen = wb.active
+    ws_resumen.title = "Kardex Resumido"
+    
+    # Hoja 2: Detallado
+    ws_detallado = wb.create_sheet(title="Kardex Detallado")
 
     # Estilos basados en la interfaz (CSS)
     fill_hdr_gris = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
@@ -476,13 +481,25 @@ def exportar_kardex():
     alignment_right = Alignment(horizontal="right", vertical="center")
     border_thin = Border(left=Side(style='thin', color='E2E8F0'), right=Side(style='thin', color='E2E8F0'), top=Side(style='thin', color='E2E8F0'), bottom=Side(style='thin', color='E2E8F0'))
 
-    headers = ['Producto', 'Grupo', 'Fecha', 'Semana del Mes', 'Detalle', 'Documento', 'No. Documento', 
+    # --- CONFIGURAR HOJA: KARDEX RESUMIDO ---
+    headers_resumen = ['No.', 'Producto', 'Grupo', 'Unidad', 'Exist. Inicial', 'Entradas', 'Salidas', 'Exist. Final', 'Costo Prom. (Q)', 'Total (Q)']
+    ws_resumen.append(headers_resumen)
+    for col_num, cell in enumerate(ws_resumen[1], 1):
+        if col_num == 6: cell.fill, cell.font = fill_hdr_verde, font_hdr_verde
+        elif col_num == 7: cell.fill, cell.font = fill_hdr_naranja, font_hdr_naranja
+        elif col_num >= 8: cell.fill, cell.font = fill_hdr_azul, font_hdr_azul
+        else: cell.fill, cell.font = fill_hdr_gris, font_hdr_gris
+        cell.alignment = alignment_left if col_num <= 4 else alignment_right
+        cell.border = border_thin
+
+    # --- CONFIGURAR HOJA: KARDEX DETALLADO ---
+    headers_detallado = ['Producto', 'Grupo', 'Fecha', 'Semana del Mes', 'Detalle', 'Documento', 'No. Documento', 
                  'Entrada Cantidad', 'Entrada Costo (Q)', 'Entrada Total (Q)',
                  'Salida Cantidad', 'Salida Costo (Q)', 'Salida Total (Q)',
                  'Saldo Cantidad', 'Saldo Costo Prom (Q)', 'Saldo Total (Q)']
                  
-    ws.append(headers)
-    for col_num, cell in enumerate(ws[1], 1):
+    ws_detallado.append(headers_detallado)
+    for col_num, cell in enumerate(ws_detallado[1], 1):
         if 8 <= col_num <= 10: cell.fill, cell.font = fill_hdr_verde, font_hdr_verde
         elif 11 <= col_num <= 13: cell.fill, cell.font = fill_hdr_naranja, font_hdr_naranja
         elif 14 <= col_num <= 16: cell.fill, cell.font = fill_hdr_azul, font_hdr_azul
@@ -490,19 +507,22 @@ def exportar_kardex():
         cell.alignment = alignment_left if col_num <= 7 else alignment_right
         cell.border = border_thin
 
-    for mat in materiales:
+    for idx, mat in enumerate(materiales, 1):
         mat_id = mat['id']
         cant_saldo = mat['cantidad_inicial']
         precio_promedio = mat['precio_unitario']
         total_saldo = cant_saldo * precio_promedio
         
-        row = [
+        acum_ingresos = 0
+        acum_salidas = 0
+        
+        row_det = [
             mat['nombre'], mat['tipo_material'], '-', '-', 'Saldo Inicial', '', '',
             '', '', '', '', '', '',
             cant_saldo, round(precio_promedio, 2), round(total_saldo, 2)
         ]
-        ws.append(row)
-        for col_num, cell in enumerate(ws[ws.max_row], 1):
+        ws_detallado.append(row_det)
+        for col_num, cell in enumerate(ws_detallado[ws_detallado.max_row], 1):
             if 14 <= col_num <= 16: cell.fill = fill_celda_azul
             cell.alignment = alignment_left if col_num <= 7 else alignment_right
             cell.border = border_thin
@@ -519,15 +539,16 @@ def exportar_kardex():
                 costo_mov = mov['cantidad'] * mov['precio_unitario']
                 cant_saldo += mov['cantidad']
                 total_saldo += costo_mov
+                acum_ingresos += mov['cantidad']
                 if cant_saldo > 0: precio_promedio = total_saldo / cant_saldo
-                row = [
+                row_det = [
                     mat['nombre'], mat['tipo_material'], mov['fecha'], semana, 'Entrada / Compra', doc, num_doc,
                     mov['cantidad'], round(mov['precio_unitario'], 2), round(costo_mov, 2),
                     '', '', '',
                     cant_saldo, round(precio_promedio, 2), round(total_saldo, 2)
                 ]
-                ws.append(row)
-                for col_num, cell in enumerate(ws[ws.max_row], 1):
+                ws_detallado.append(row_det)
+                for col_num, cell in enumerate(ws_detallado[ws_detallado.max_row], 1):
                     if 8 <= col_num <= 10: cell.fill = fill_celda_verde
                     elif 14 <= col_num <= 16: cell.fill = fill_celda_azul
                     cell.alignment = alignment_left if col_num <= 7 else alignment_right
@@ -537,14 +558,15 @@ def exportar_kardex():
                 costo_mov = mov['cantidad'] * precio_promedio
                 cant_saldo -= mov['cantidad']
                 total_saldo -= costo_mov
-                row = [
+                acum_salidas += mov['cantidad']
+                row_det = [
                     mat['nombre'], mat['tipo_material'], mov['fecha'], semana, 'Salida / Egreso', doc, num_doc,
                     '', '', '',
                     mov['cantidad'], round(precio_promedio, 2), round(costo_mov, 2),
                     cant_saldo, round(precio_promedio, 2), round(total_saldo, 2)
                 ]
-                ws.append(row)
-                for col_num, cell in enumerate(ws[ws.max_row], 1):
+                ws_detallado.append(row_det)
+                for col_num, cell in enumerate(ws_detallado[ws_detallado.max_row], 1):
                     if 11 <= col_num <= 13: 
                         cell.fill = fill_celda_naranja
                         if col_num == 11: cell.font = font_naranja_bold
@@ -552,17 +574,35 @@ def exportar_kardex():
                     cell.alignment = alignment_left if col_num <= 7 else alignment_right
                     cell.border = border_thin
 
-    # Ajustar ancho de las columnas automáticamente
-    for col in ws.columns:
-        max_length = 0
-        column = col[0].column_letter
-        for cell in col:
-            try:
-                if len(str(cell.value)) > max_length:
-                    max_length = len(str(cell.value))
-            except:
-                pass
-        ws.column_dimensions[column].width = max_length + 2
+        # FILA EN BLANCO PARA SEPARAR PRODUCTOS EN EL DETALLADO
+        ws_detallado.append([])
+
+        # AGREGAR FILA AL KARDEX RESUMIDO
+        row_res = [
+            idx, mat['nombre'], mat['tipo_material'], mat['unidad'],
+            mat['cantidad_inicial'], acum_ingresos, acum_salidas,
+            cant_saldo, round(precio_promedio, 2), round(total_saldo, 2)
+        ]
+        ws_resumen.append(row_res)
+        for col_num, cell in enumerate(ws_resumen[ws_resumen.max_row], 1):
+            if col_num == 6: cell.fill = fill_celda_verde
+            elif col_num == 7: cell.fill = fill_celda_naranja
+            elif col_num >= 8: cell.fill = fill_celda_azul
+            cell.alignment = alignment_left if col_num <= 4 else alignment_right
+            cell.border = border_thin
+
+    # Ajustar ancho de las columnas automáticamente en AMBAS hojas
+    for sheet in [ws_resumen, ws_detallado]:
+        for col in sheet.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            sheet.column_dimensions[column].width = max_length + 2
 
     conn.close()
     
