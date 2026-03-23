@@ -1,6 +1,7 @@
 import sqlite3
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, session
 from datetime import datetime
+import calendar
 import csv
 from io import StringIO, BytesIO
 from openpyxl import Workbook
@@ -111,6 +112,17 @@ def index():
     materiales_db = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
     materiales_kardex = []
     
+    alertas_rojas = []
+    alertas_amarillas = []
+    
+    # Detectar si estamos a fin de mes (últimos 3 días) para sugerir descarga
+    hoy = datetime.now()
+    try:
+        _, ultimo_dia = calendar.monthrange(hoy.year, hoy.month)
+        es_fin_de_mes = (ultimo_dia - hoy.day) <= 3
+    except Exception:
+        es_fin_de_mes = False
+        
     # Lógica de Costo Promedio Ponderado
     for mat in materiales_db:
         mat_id = mat['id']
@@ -171,6 +183,12 @@ def index():
         avg_ingreso = acum_ingreso_total / acum_ingreso_cant if acum_ingreso_cant > 0 else 0
         avg_salida = acum_salida_total / acum_salida_cant if acum_salida_cant > 0 else 0
 
+        # --- LÓGICA DE ALERTAS ---
+        if cant_saldo < 2:
+            alertas_rojas.append({'nombre': mat['nombre'], 'stock': cant_saldo})
+        elif cant_saldo < 5:
+            alertas_amarillas.append({'nombre': mat['nombre'], 'stock': cant_saldo})
+
         materiales_kardex.append({
             'id': mat['id'],
             'nombre': mat['nombre'],
@@ -193,7 +211,7 @@ def index():
     grupos = conn.execute('SELECT * FROM grupos ORDER BY nombre ASC').fetchall()
     conn.close()
     
-    return render_template('index.html', materiales=materiales_kardex, grupos=grupos, mes_filtro=mes_filtro)
+    return render_template('index.html', materiales=materiales_kardex, grupos=grupos, mes_filtro=mes_filtro, alertas_rojas=alertas_rojas, alertas_amarillas=alertas_amarillas, es_fin_de_mes=es_fin_de_mes)
 
 @app.route('/inventario', methods=['GET', 'POST'])
 def inventario():

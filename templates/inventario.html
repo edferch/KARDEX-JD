@@ -12,7 +12,7 @@
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, message in messages %}
-          <div style="padding: 15px; margin-bottom: 20px; border-radius: 8px; text-align: center; font-weight: bold;
+          <div class="flash-mensaje" style="padding: 15px; margin-bottom: 20px; border-radius: 8px; text-align: center; font-weight: bold; transition: opacity 0.5s ease;
             {% if category == 'error' %} background-color: #fecaca; color: #991b1b; border: 1px solid #f87171;
             {% else %} background-color: #d1fae5; color: #065f46; border: 1px solid #34d399; {% endif %}">
             {{ message }}
@@ -20,6 +20,15 @@
         {% endfor %}
       {% endif %}
     {% endwith %}
+
+    <script>
+        setTimeout(function() {
+            document.querySelectorAll('.flash-mensaje').forEach(function(msg) {
+                msg.style.opacity = '0';
+                setTimeout(() => msg.style.display = 'none', 500);
+            });
+        }, 3000);
+    </script>
 
     <div class="kardex-tabla-contenedor">
         <table class="kardex-tabla">

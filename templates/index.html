@@ -4,7 +4,7 @@
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, message in messages %}
-          <div style="padding: 15px; margin-bottom: 20px; border-radius: 5px; text-align: center; font-weight: bold;
+          <div class="flash-mensaje" style="padding: 15px; margin-bottom: 20px; border-radius: 5px; text-align: center; font-weight: bold; transition: opacity 0.5s ease;
             {% if category == 'error' %} background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;
             {% else %} background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; {% endif %}">
             {{ message }}
@@ -13,6 +13,41 @@
       {% endif %}
     {% endwith %}
     
+    <script>
+        setTimeout(function() {
+            document.querySelectorAll('.flash-mensaje').forEach(function(msg) {
+                msg.style.opacity = '0'; // Efecto de desvanecimiento
+                setTimeout(() => msg.style.display = 'none', 500); // Se remueve del diseño
+            });
+        }, 3000); // 3000 ms = 3 segundos
+    </script>
+
+    <!-- PANEL DE NOTIFICACIONES SUTIL -->
+    {% if alertas_rojas or alertas_amarillas or es_fin_de_mes %}
+    <div style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 15px; margin-bottom: 20px; display: flex; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); gap: 15px; flex-wrap: wrap;">
+        <div style="font-size: 16px; color: #64748b; display: flex; align-items: center; gap: 5px;">
+            <span style="font-size: 18px;">🔔</span> <span style="font-weight: 600; font-size: 13px;">Notificaciones:</span>
+        </div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; flex: 1;">
+            {% if es_fin_de_mes %}
+            <span style="background-color: #eff6ff; color: #1e3a8a; padding: 4px 12px; border-radius: 20px; font-size: 12px; border: 1px solid #bfdbfe; font-weight: 500; display: inline-flex; align-items: center; gap: 5px;">
+                📅 Cierre de mes: <a href="/exportar_kardex?mes={{ mes_filtro }}" style="color: #2563eb; font-weight: bold; text-decoration: none;">Descargar Kardex</a>
+            </span>
+            {% endif %}
+            {% if alertas_rojas %}
+            <span style="background-color: #fef2f2; color: #991b1b; padding: 4px 12px; border-radius: 20px; font-size: 12px; border: 1px solid #fecaca; font-weight: 500; display: inline-flex; align-items: center; gap: 5px; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{% for alerta in alertas_rojas %}{{ alerta.nombre }} ({{ alerta.stock }}){% if not loop.last %}, {% endif %}{% endfor %}">
+                🚨 Crítico: {% for alerta in alertas_rojas %}{{ alerta.nombre }} ({{ alerta.stock }}){% if not loop.last %}, {% endif %}{% endfor %}
+            </span>
+            {% endif %}
+            {% if alertas_amarillas %}
+            <span style="background-color: #fffbeb; color: #92400e; padding: 4px 12px; border-radius: 20px; font-size: 12px; border: 1px solid #fde68a; font-weight: 500; display: inline-flex; align-items: center; gap: 5px; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{% for alerta in alertas_amarillas %}{{ alerta.nombre }} ({{ alerta.stock }}){% if not loop.last %}, {% endif %}{% endfor %}">
+                ⚠️ Bajo: {% for alerta in alertas_amarillas %}{{ alerta.nombre }} ({{ alerta.stock }}){% if not loop.last %}, {% endif %}{% endfor %}
+            </span>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
     <div style="margin: 20px 0; display: flex; flex-direction: column; gap: 15px;">
         <!-- Barra de Filtrado -->
         <div style="display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 15px;">
