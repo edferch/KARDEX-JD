@@ -4,10 +4,10 @@
     <h2>Reportes</h2>
     
     <div class="card" style="margin-bottom: 25px; padding: 20px;">
-        <form method="GET" action="/reporte" style="display: flex; gap: 15px; align-items: flex-end;" autocomplete="off">
-            <div class="form-grupo" style="flex: 1; margin-bottom: 0;">
+        <form method="GET" action="/reporte" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;" autocomplete="off">
+            <div class="form-grupo" style="flex: 1; min-width: 250px; margin-bottom: 0;">
                 <label>Producto / Material:</label>
-                <select name="material_id" required onchange="this.form.submit()">
+                <select name="material_id" required>
                     <option value="">-- Seleccione un producto --</option>
                     {% for mat in materiales %}
                         <option value="{{ mat['id'] }}" {% if selected_material_id == mat['id'] %}selected{% endif %}>
@@ -16,6 +16,16 @@
                     {% endfor %}
                 </select>
             </div>
+            
+            <div class="form-grupo" style="margin-bottom: 0;">
+                <label>Filtrar por Mes:</label>
+                <input type="month" name="mes" value="{{ mes_filtro if mes_filtro != 'todos' else '' }}">
+            </div>
+            
+            <button type="submit" class="btn" style="padding: 12px 24px;">Consultar</button>
+            {% if selected_material_id %}
+                <a href="/reporte?material_id={{ selected_material_id }}&mes=todos" class="btn btn-secundario" style="padding: 12px 24px;">Histórico Completo</a>
+            {% endif %}
         </form>
     </div>
 

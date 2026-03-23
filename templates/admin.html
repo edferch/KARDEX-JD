@@ -15,6 +15,29 @@
       {% endif %}
     {% endwith %}
     
+    {% if login_required %}
+    <div class="card" style="max-width: 400px; margin: 50px auto; text-align: center; padding: 40px 30px;">
+        <h3 style="color: #1e293b; margin-top: 0;">🔒 Acceso Restringido</h3>
+        <p style="color: #64748b; margin-bottom: 25px; font-size: 14px;">Ingrese la contraseña de administrador para acceder a esta configuración.</p>
+        <form method="POST" action="/admin" autocomplete="off">
+            <div class="form-grupo">
+                <input type="password" name="admin_password" placeholder="Contraseña..." required style="text-align: center; font-size: 16px; letter-spacing: 2px;">
+            </div>
+            <button type="submit" class="btn" style="width: 100%; margin-top: 10px;">Ingresar al Panel</button>
+        </form>
+        <div style="margin-top: 20px;">
+            <a href="/" style="color: #3b82f6; text-decoration: none; font-size: 14px;">&larr; Volver al inicio</a>
+        </div>
+    </div>
+    {% else %}
+    
+    <div style="text-align: right;">
+        <form method="POST" action="/admin" style="margin: 0; display: inline-block;">
+            <input type="hidden" name="accion" value="logout">
+            <button type="submit" class="btn btn-secundario" style="padding: 8px 16px; font-size: 13px;">Cerrar Sesión</button>
+        </form>
+    </div>
+
     <div class="dashboard-grid" style="margin-top: 20px;">
         <!-- MÓDULO DE GRUPOS -->
         <div class="card">
@@ -124,4 +147,5 @@
     <div style="text-align: center; margin-top: 30px;">
         <a href="/" class="btn" style="background-color: #7f8c8d;">Volver al Inicio</a>
     </div>
+    {% endif %}
 {% endblock %}

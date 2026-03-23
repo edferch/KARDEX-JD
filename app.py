@@ -1,5 +1,5 @@
 import sqlite3
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, session
 from datetime import datetime
 import csv
 from io import StringIO, BytesIO
@@ -51,6 +51,12 @@ def inicializar_db():
     except sqlite3.OperationalError:
         pass
 
+    # Agregar columna de fecha de factura a movimientos si no existe
+    try:
+        cursor.execute('ALTER TABLE movimientos ADD COLUMN fecha_factura DATE')
+    except sqlite3.OperationalError:
+        pass
+
     # Tabla de Proveedores
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS proveedores (
@@ -96,6 +102,12 @@ def get_db_connection():
 @app.route('/')
 def index():
     conn = get_db_connection()
+    
+    # Obtener el mes desde la URL, si no hay, usar el mes actual
+    mes_filtro = request.args.get('mes')
+    if not mes_filtro:
+        mes_filtro = datetime.now().strftime('%Y-%m')
+        
     materiales_db = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
     materiales_kardex = []
     
@@ -107,14 +119,39 @@ def index():
         precio_promedio = mat['precio_unitario']
         total_saldo = cant_saldo * precio_promedio
         
+        movimientos = conn.execute('SELECT * FROM movimientos WHERE material_id = ? ORDER BY fecha ASC, id ASC', (mat_id,)).fetchall()
+        
+        # --- DIVIDIR MOVIMIENTOS: ANTERIORES VS ACTUALES ---
+        if mes_filtro != 'todos':
+            movs_anteriores = [m for m in movimientos if m['fecha'] < f"{mes_filtro}-01"]
+            movs_actuales = [m for m in movimientos if m['fecha'].startswith(mes_filtro)]
+        else:
+            movs_anteriores = []
+            movs_actuales = movimientos
+            
+        # 1. Procesar históricos para obtener el "Saldo Inicial" del mes seleccionado
+        for mov in movs_anteriores:
+            if mov['tipo'] == 'entrada':
+                costo_movimiento = mov['cantidad'] * mov['precio_unitario']
+                cant_saldo += mov['cantidad']
+                total_saldo += costo_movimiento
+                if cant_saldo > 0: precio_promedio = total_saldo / cant_saldo
+            elif mov['tipo'] == 'salida':
+                costo_movimiento = mov['cantidad'] * precio_promedio
+                cant_saldo -= mov['cantidad']
+                total_saldo -= costo_movimiento
+        
+        ini_cant = cant_saldo
+        ini_costo = precio_promedio
+        ini_total = total_saldo
+        
+        # 2. Procesar únicamente los movimientos del mes seleccionado
         acum_ingreso_cant = 0
         acum_ingreso_total = 0
         acum_salida_cant = 0
         acum_salida_total = 0
         
-        movimientos = conn.execute('SELECT * FROM movimientos WHERE material_id = ? ORDER BY fecha ASC, id ASC', (mat_id,)).fetchall()
-        
-        for mov in movimientos:
+        for mov in movs_actuales:
             if mov['tipo'] == 'entrada':
                 costo_movimiento = mov['cantidad'] * mov['precio_unitario']
                 cant_saldo += mov['cantidad']
@@ -139,9 +176,9 @@ def index():
             'nombre': mat['nombre'],
             'tipo_material': mat['tipo_material'],
             'unidad': mat['unidad'],
-            'ini_cant': mat['cantidad_inicial'],
-            'ini_costo': mat['precio_unitario'],
-            'ini_total': mat['cantidad_inicial'] * mat['precio_unitario'],
+            'ini_cant': ini_cant,
+            'ini_costo': ini_costo,
+            'ini_total': ini_total,
             'ing_cant': acum_ingreso_cant,
             'ing_costo': avg_ingreso,
             'ing_total': acum_ingreso_total,
@@ -156,7 +193,7 @@ def index():
     grupos = conn.execute('SELECT * FROM grupos ORDER BY nombre ASC').fetchall()
     conn.close()
     
-    return render_template('index.html', materiales=materiales_kardex, grupos=grupos)
+    return render_template('index.html', materiales=materiales_kardex, grupos=grupos, mes_filtro=mes_filtro)
 
 @app.route('/inventario', methods=['GET', 'POST'])
 def inventario():
@@ -233,6 +270,7 @@ def agregar_entrada():
         cantidad = int(request.form['cantidad'])
         precio = float(request.form['precio'])
         fecha = request.form.get('fecha')
+        fecha_factura = request.form.get('fecha_factura', '')
         documento = request.form.get('documento', '')
         numero_documento = request.form.get('numero_documento', '')
 
@@ -241,9 +279,9 @@ def agregar_entrada():
 
         conn = get_db_connection()
         conn.execute('''
-            INSERT INTO movimientos (material_id, tipo, cantidad, precio_unitario, fecha, documento, numero_documento)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (material_id, 'entrada', cantidad, precio, fecha, documento, numero_documento))
+            INSERT INTO movimientos (material_id, tipo, cantidad, precio_unitario, fecha, documento, numero_documento, fecha_factura)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (material_id, 'entrada', cantidad, precio, fecha, documento, numero_documento, fecha_factura))
         conn.commit()
         conn.close()
         
@@ -334,6 +372,10 @@ def reporte():
     materiales = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
     
     selected_material_id = request.args.get('material_id', type=int)
+    mes_filtro = request.args.get('mes')
+    if not mes_filtro:
+        mes_filtro = datetime.now().strftime('%Y-%m')
+        
     reporte_datos = None
     
     if selected_material_id:
@@ -344,17 +386,37 @@ def reporte():
             precio_promedio = mat['precio_unitario']
             total_saldo = cant_saldo * precio_promedio
             
+            movimientos = conn.execute('SELECT * FROM movimientos WHERE material_id = ? ORDER BY fecha ASC, id ASC', (mat_id,)).fetchall()
+            
+            if mes_filtro != 'todos':
+                movs_anteriores = [m for m in movimientos if m['fecha'] < f"{mes_filtro}-01"]
+                movs_actuales = [m for m in movimientos if m['fecha'].startswith(mes_filtro)]
+            else:
+                movs_anteriores = []
+                movs_actuales = movimientos
+                
+            for mov in movs_anteriores:
+                if mov['tipo'] == 'entrada':
+                    costo_movimiento = mov['cantidad'] * mov['precio_unitario']
+                    cant_saldo += mov['cantidad']
+                    total_saldo += costo_movimiento
+                    if cant_saldo > 0: precio_promedio = total_saldo / cant_saldo
+                elif mov['tipo'] == 'salida':
+                    costo_movimiento = mov['cantidad'] * precio_promedio
+                    cant_saldo -= mov['cantidad']
+                    total_saldo -= costo_movimiento
+
             filas_kardex = []
-            # Primera fila: El saldo inicial
+            # Primera fila: El saldo inicial o anterior según el filtro
+            titulo_saldo = 'Saldo Inicial' if mes_filtro == 'todos' else f'Saldo Anterior ({mes_filtro})'
             filas_kardex.append({
-                'fecha': '-', 'detalle': 'Saldo Inicial',
+                'fecha': '-', 'detalle': titulo_saldo,
                 'ing_cant': '', 'ing_costo': '', 'ing_total': '',
                 'sal_cant': '', 'sal_costo': '', 'sal_total': '',
                 'saldo_cant': cant_saldo, 'saldo_costo': precio_promedio, 'saldo_total': total_saldo
             })
             
-            movs = conn.execute('SELECT * FROM movimientos WHERE material_id = ? ORDER BY fecha ASC, id ASC', (mat_id,)).fetchall()
-            for mov in movs:
+            for mov in movs_actuales:
                 doc_info = ""
                 if mov['documento'] and mov['numero_documento']:
                     doc_info = f" ({mov['documento']} #{mov['numero_documento']})"
@@ -388,7 +450,7 @@ def reporte():
                     
             reporte_datos = {'material': mat, 'filas': filas_kardex}
     conn.close()
-    return render_template('reporte.html', materiales=materiales, reporte_datos=reporte_datos, selected_material_id=selected_material_id)
+    return render_template('reporte.html', materiales=materiales, reporte_datos=reporte_datos, selected_material_id=selected_material_id, mes_filtro=mes_filtro)
 
 # --- RUTAS DE EXPORTACIÓN A EXCEL (CSV) ---
 @app.route('/exportar_inventario')
@@ -450,6 +512,10 @@ def exportar_inventario():
 
 @app.route('/exportar_kardex')
 def exportar_kardex():
+    mes_filtro = request.args.get('mes')
+    if not mes_filtro:
+        mes_filtro = datetime.now().strftime('%Y-%m')
+        
     conn = get_db_connection()
     materiales = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
     
@@ -513,11 +579,33 @@ def exportar_kardex():
         precio_promedio = mat['precio_unitario']
         total_saldo = cant_saldo * precio_promedio
         
+        movimientos = conn.execute('SELECT * FROM movimientos WHERE material_id = ? ORDER BY fecha ASC, id ASC', (mat_id,)).fetchall()
+        
+        if mes_filtro != 'todos':
+            movs_anteriores = [m for m in movimientos if m['fecha'] < f"{mes_filtro}-01"]
+            movs_actuales = [m for m in movimientos if m['fecha'].startswith(mes_filtro)]
+        else:
+            movs_anteriores = []
+            movs_actuales = movimientos
+            
+        for mov in movs_anteriores:
+            if mov['tipo'] == 'entrada':
+                costo_movimiento = mov['cantidad'] * mov['precio_unitario']
+                cant_saldo += mov['cantidad']
+                total_saldo += costo_movimiento
+                if cant_saldo > 0: precio_promedio = total_saldo / cant_saldo
+            elif mov['tipo'] == 'salida':
+                costo_movimiento = mov['cantidad'] * precio_promedio
+                cant_saldo -= mov['cantidad']
+                total_saldo -= costo_movimiento
+
+        ini_cant = cant_saldo
         acum_ingresos = 0
         acum_salidas = 0
         
+        titulo_saldo = 'Saldo Inicial' if mes_filtro == 'todos' else f'Saldo Anterior ({mes_filtro})'
         row_det = [
-            mat['nombre'], mat['tipo_material'], '-', '-', 'Saldo Inicial', '', '',
+            mat['nombre'], mat['tipo_material'], '-', '-', titulo_saldo, '', '',
             '', '', '', '', '', '',
             cant_saldo, round(precio_promedio, 2), round(total_saldo, 2)
         ]
@@ -527,8 +615,7 @@ def exportar_kardex():
             cell.alignment = alignment_left if col_num <= 7 else alignment_right
             cell.border = border_thin
         
-        movs = conn.execute('SELECT * FROM movimientos WHERE material_id = ? ORDER BY fecha ASC, id ASC', (mat_id,)).fetchall()
-        for mov in movs:
+        for mov in movs_actuales:
             doc = mov['documento'] or ''
             num_doc = mov['numero_documento'] or ''
             
@@ -580,7 +667,7 @@ def exportar_kardex():
         # AGREGAR FILA AL KARDEX RESUMIDO
         row_res = [
             idx, mat['nombre'], mat['tipo_material'], mat['unidad'],
-            mat['cantidad_inicial'], acum_ingresos, acum_salidas,
+            ini_cant, acum_ingresos, acum_salidas,
             cant_saldo, round(precio_promedio, 2), round(total_saldo, 2)
         ]
         ws_resumen.append(row_res)
@@ -608,14 +695,31 @@ def exportar_kardex():
     
     output = BytesIO()
     wb.save(output)
-    return Response(output.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers={'Content-Disposition': 'attachment; filename=Kardex_General_Completo.xlsx'})
+    nombre_archivo = f'Kardex_General_{mes_filtro}.xlsx' if mes_filtro != 'todos' else 'Kardex_General_Completo.xlsx'
+    return Response(output.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers={'Content-Disposition': f'attachment; filename={nombre_archivo}'})
 
 @app.route('/admin', methods=['GET', 'POST'])
 def admin():
+    # --- SISTEMA DE LOGIN PARA LA PANTALLA DE ADMIN ---
+    if not session.get('admin_logged_in'):
+        if request.method == 'POST':
+            if request.form.get('admin_password') == 'admin123': # <- Contraseña de administrador
+                session['admin_logged_in'] = True
+                flash("Acceso concedido.", "success")
+                return redirect(url_for('admin'))
+            elif request.form.get('admin_password'):
+                flash("Error: Contraseña incorrecta.", "error")
+        return render_template('admin.html', login_required=True)
+
     conn = get_db_connection()
     if request.method == 'POST':
         accion = request.form.get('accion')
         
+        if accion == 'logout':
+            session.pop('admin_logged_in', None)
+            flash("Sesión de administrador cerrada.", "success")
+            return redirect(url_for('index'))
+            
         if accion == 'grupo':
             try:
                 conn.execute('INSERT INTO grupos (nombre) VALUES (?)', (request.form['nombre_grupo'],))

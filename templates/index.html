@@ -13,10 +13,23 @@
       {% endif %}
     {% endwith %}
     
-    <div style="margin: 20px 0; display: flex; gap: 15px;">
-        <button onclick="abrirModalMovimiento('modalEntrada')" class="btn btn-entrada" style="flex: 1; font-size: 16px;">+ Registrar Entrada / Compra</button>
-        <button onclick="abrirModalMovimiento('modalSalida')" class="btn btn-salida" style="flex: 1; font-size: 16px;">- Registrar Salida / Egreso</button>
-        <a href="/exportar_kardex" class="btn" style="background-color: #10b981; padding: 12px 24px; display: flex; align-items: center;">📥 Descargar Kardex</a>
+    <div style="margin: 20px 0; display: flex; flex-direction: column; gap: 15px;">
+        <!-- Barra de Filtrado -->
+        <div style="display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 15px;">
+            <form method="GET" action="/" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <label style="font-weight: 600; color: #475569;">Filtrar por Mes:</label>
+                <input type="month" name="mes" value="{{ mes_filtro if mes_filtro != 'todos' else '' }}" style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; color: #1e293b;">
+                <button type="submit" class="btn" style="padding: 8px 16px;">Filtrar</button>
+                <a href="/?mes=todos" class="btn btn-secundario" style="padding: 8px 16px;">Ver Histórico Completo</a>
+            </form>
+        </div>
+        
+        <!-- Botones de Acción Rápida -->
+        <div style="display: flex; gap: 15px;">
+            <button onclick="abrirModalMovimiento('modalEntrada')" class="btn btn-entrada" style="flex: 1; font-size: 16px;">+ Registrar Entrada / Compra</button>
+            <button onclick="abrirModalMovimiento('modalSalida')" class="btn btn-salida" style="flex: 1; font-size: 16px;">- Registrar Salida / Egreso</button>
+            <a href="/exportar_kardex?mes={{ mes_filtro }}" class="btn" style="background-color: #10b981; padding: 12px 24px; display: flex; align-items: center;">📥 Descargar Kardex del Mes</a>
+        </div>
     </div>
 
     <div class="kardex-tabla-contenedor">
@@ -104,8 +117,13 @@
                     <option value="{{ mat['id'] }}">{{ mat['nombre'] }} ({{ mat['tipo_material'] }})</option>
                     {% endfor %}
                 </select>
-                <label>Fecha de Movimiento:</label>
-                <input type="date" name="fecha" id="fechaEntrada" required>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label style="margin: 0;">Fecha de Registro (Automática):</label>
+                    <span onclick="desbloquearFecha('fechaEntrada')" style="font-size: 11px; color: #3b82f6; cursor: pointer; font-weight: 600; padding: 4px 8px; background-color: #eff6ff; border-radius: 6px; border: 1px solid #bfdbfe; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='#dbeafe'" onmouseout="this.style.backgroundColor='#eff6ff'" title="Desbloquear (Solo Admin)">Cambiar fecha</span>
+                </div>
+                <input type="date" name="fecha" id="fechaEntrada" required readonly style="background-color: #f1f5f9; cursor: not-allowed; color: #64748b; font-weight: 600;">
+                <label>Fecha de Factura / Documento:</label>
+                <input type="date" name="fecha_factura" id="fechaFacturaEntrada" required>
                 <label>Tipo de Documento:</label>
                 <input type="text" name="documento" required>
                 <label>Número de Documento:</label>
@@ -133,8 +151,11 @@
                     <option value="{{ mat['id'] }}">{{ mat['nombre'] }} ({{ mat['tipo_material'] }})</option>
                     {% endfor %}
                 </select>
-                <label>Fecha de Movimiento:</label>
-                <input type="date" name="fecha" id="fechaSalida" required>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label style="margin: 0;">Fecha de Registro (Automática):</label>
+                    <span onclick="desbloquearFecha('fechaSalida')" style="font-size: 11px; color: #3b82f6; cursor: pointer; font-weight: 600; padding: 4px 8px; background-color: #eff6ff; border-radius: 6px; border: 1px solid #bfdbfe; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='#dbeafe'" onmouseout="this.style.backgroundColor='#eff6ff'" title="Desbloquear (Solo Admin)">Cambiar fecha</span>
+                </div>
+                <input type="date" name="fecha" id="fechaSalida" required readonly style="background-color: #f1f5f9; cursor: not-allowed; color: #64748b; font-weight: 600;">
                 <label>Tipo de Documento:</label>
                 <input type="text" name="documento" required>
                 <label>Número de Documento:</label>
@@ -149,6 +170,22 @@
         </form>
     </div>
 
+    <!-- Overlay y Modal Secundario para Contraseña -->
+    <div class="overlay" id="overlaySecundario" onclick="cerrarModalPassword()" style="z-index: 1050;"></div>
+    
+    <div class="modal" id="modalPassword" style="z-index: 1100; width: 350px;">
+        <h3 style="color: #1e293b; margin-top: 0; text-align: center; border-bottom: none;">🔒 Seguridad</h3>
+        <p style="color: #64748b; font-size: 13px; text-align: center; margin-bottom: 20px;">Ingrese la contraseña de administrador para habilitar la edición de la fecha.</p>
+        <div class="form-grupo">
+            <input type="password" id="inputAdminPassword" placeholder="Contraseña..." autocomplete="off" style="text-align: center; font-size: 16px; letter-spacing: 2px;" onkeypress="if(event.key === 'Enter') verificarPassword();">
+        </div>
+        <div id="errorPassword" style="color: #e74c3c; font-size: 12px; text-align: center; display: none; margin-top: -10px; margin-bottom: 10px;">❌ Contraseña incorrecta.</div>
+        <div class="modal-acciones">
+            <button type="button" class="btn btn-secundario" onclick="cerrarModalPassword()">Cancelar</button>
+            <button type="button" class="btn" onclick="verificarPassword()">Confirmar</button>
+        </div>
+    </div>
+
     <script>
         function abrirModalMovimiento(modalId) {
             document.getElementById(modalId).style.display = 'block';
@@ -159,9 +196,40 @@
             document.getElementById("fondoOscuro").classList.remove("activo");
         }
 
+        let campoFechaActual = '';
+
+        function desbloquearFecha(campoId) {
+            campoFechaActual = campoId;
+            document.getElementById('modalPassword').style.display = 'block';
+            document.getElementById('overlaySecundario').classList.add('activo');
+            document.getElementById('inputAdminPassword').value = '';
+            document.getElementById('errorPassword').style.display = 'none';
+            document.getElementById('inputAdminPassword').focus();
+        }
+
+        function cerrarModalPassword() {
+            document.getElementById('modalPassword').style.display = 'none';
+            document.getElementById('overlaySecundario').classList.remove('activo');
+        }
+
+        function verificarPassword() {
+            const password = document.getElementById('inputAdminPassword').value;
+            if (password === "admin123") { // <-- AQUÍ PUEDES CAMBIAR TU CONTRASEÑA
+                const inputFecha = document.getElementById(campoFechaActual);
+                inputFecha.removeAttribute('readonly');
+                inputFecha.style.backgroundColor = '#ffffff';
+                inputFecha.style.cursor = 'text';
+                inputFecha.style.color = '#1e293b';
+                cerrarModalPassword();
+            } else {
+                document.getElementById('errorPassword').style.display = 'block';
+            }
+        }
+
         // Poner la fecha actual por defecto en los modales
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('fechaEntrada').value = today;
+        document.getElementById('fechaFacturaEntrada').value = today;
         document.getElementById('fechaSalida').value = today;
     </script>
 {% endblock %}
