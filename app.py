@@ -2,7 +2,9 @@ import sqlite3
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response
 from datetime import datetime
 import csv
-from io import StringIO
+from io import StringIO, BytesIO
+from openpyxl import Workbook
+from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 
 app = Flask(__name__)
 # Clave secreta necesaria para los mensajes de éxito/error (flash)
@@ -395,54 +397,121 @@ def exportar_inventario():
     materiales = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
     conn.close()
     
-    si = StringIO()
-    cw = csv.writer(si)
-    # Fila de Encabezados
-    cw.writerow(['No.', 'Nombre', 'Grupo', 'No. Metrico', 'Origen', 'Fuente', 'Proveedor', 'Presentacion', 'Unidad', 'Existencia Inicial', 'Costo Unitario (Q)'])
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Inventario"
     
+    # Estilos basados en la interfaz (CSS)
+    fill_hdr_gris = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+    font_hdr_gris = Font(color="475569", bold=True)
+    alignment_left = Alignment(horizontal="left", vertical="center")
+    alignment_right = Alignment(horizontal="right", vertical="center")
+    border_thin = Border(left=Side(style='thin', color='E2E8F0'), 
+                         right=Side(style='thin', color='E2E8F0'), 
+                         top=Side(style='thin', color='E2E8F0'), 
+                         bottom=Side(style='thin', color='E2E8F0'))
+
+    headers = ['No.', 'Nombre', 'Grupo', 'No. Metrico', 'Origen', 'Fuente', 'Proveedor', 'Presentacion', 'Unidad', 'Existencia Inicial', 'Costo Unitario (Q)']
+    
+    ws.append(headers)
+    for col_num, cell in enumerate(ws[1], 1):
+        cell.fill = fill_hdr_gris
+        cell.font = font_hdr_gris
+        cell.alignment = alignment_left if col_num <= 9 else alignment_right
+        cell.border = border_thin
+
     for idx, mat in enumerate(materiales, 1):
-        cw.writerow([
+        row = [
             idx, mat['nombre'], mat['tipo_material'], mat['numero_metrico'],
             mat['origen'], mat['fuente'], mat['empresa'], mat['presentacion'],
             mat['unidad'], mat['cantidad_inicial'], round(mat['precio_unitario'], 2)
-        ])
-        
-    # utf-8-sig asegura que Excel lea correctamente los caracteres como tildes
-    output = si.getvalue().encode('utf-8-sig')
-    return Response(output, mimetype='text/csv', headers={'Content-Disposition': 'attachment; filename=Inventario_General.csv'})
+        ]
+        ws.append(row)
+        for col_num, cell in enumerate(ws[ws.max_row], 1):
+            cell.alignment = alignment_left if col_num <= 9 else alignment_right
+            cell.border = border_thin
+
+    # Ajustar ancho de las columnas automáticamente
+    for col in ws.columns:
+        max_length = 0
+        column = col[0].column_letter
+        for cell in col:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
+                pass
+        ws.column_dimensions[column].width = max_length + 2
+
+    output = BytesIO()
+    wb.save(output)
+    
+    return Response(output.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers={'Content-Disposition': 'attachment; filename=Inventario_General.xlsx'})
 
 @app.route('/exportar_kardex')
 def exportar_kardex():
     conn = get_db_connection()
     materiales = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
     
-    si = StringIO()
-    cw = csv.writer(si)
-    # Fila de Encabezados
-    cw.writerow(['Producto', 'Grupo', 'Fecha', 'Semana del Mes', 'Detalle', 'Documento', 'No. Documento', 
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Kardex"
+
+    # Estilos basados en la interfaz (CSS)
+    fill_hdr_gris = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+    font_hdr_gris = Font(color="475569", bold=True)
+    fill_hdr_verde = PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid")
+    font_hdr_verde = Font(color="065F46", bold=True)
+    fill_hdr_naranja = PatternFill(start_color="FFEDD5", end_color="FFEDD5", fill_type="solid")
+    font_hdr_naranja = Font(color="9A3412", bold=True)
+    fill_hdr_azul = PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")
+    font_hdr_azul = Font(color="1E3A8A", bold=True)
+    
+    fill_celda_verde = PatternFill(start_color="ECFDF5", end_color="ECFDF5", fill_type="solid")
+    fill_celda_naranja = PatternFill(start_color="FFF7ED", end_color="FFF7ED", fill_type="solid")
+    fill_celda_azul = PatternFill(start_color="EFF6FF", end_color="EFF6FF", fill_type="solid")
+    font_naranja_bold = Font(color="9A3412", bold=True)
+
+    alignment_left = Alignment(horizontal="left", vertical="center")
+    alignment_right = Alignment(horizontal="right", vertical="center")
+    border_thin = Border(left=Side(style='thin', color='E2E8F0'), right=Side(style='thin', color='E2E8F0'), top=Side(style='thin', color='E2E8F0'), bottom=Side(style='thin', color='E2E8F0'))
+
+    headers = ['Producto', 'Grupo', 'Fecha', 'Semana del Mes', 'Detalle', 'Documento', 'No. Documento', 
                  'Entrada Cantidad', 'Entrada Costo (Q)', 'Entrada Total (Q)',
                  'Salida Cantidad', 'Salida Costo (Q)', 'Salida Total (Q)',
-                 'Saldo Cantidad', 'Saldo Costo Prom (Q)', 'Saldo Total (Q)'])
+                 'Saldo Cantidad', 'Saldo Costo Prom (Q)', 'Saldo Total (Q)']
                  
+    ws.append(headers)
+    for col_num, cell in enumerate(ws[1], 1):
+        if 8 <= col_num <= 10: cell.fill, cell.font = fill_hdr_verde, font_hdr_verde
+        elif 11 <= col_num <= 13: cell.fill, cell.font = fill_hdr_naranja, font_hdr_naranja
+        elif 14 <= col_num <= 16: cell.fill, cell.font = fill_hdr_azul, font_hdr_azul
+        else: cell.fill, cell.font = fill_hdr_gris, font_hdr_gris
+        cell.alignment = alignment_left if col_num <= 7 else alignment_right
+        cell.border = border_thin
+
     for mat in materiales:
         mat_id = mat['id']
         cant_saldo = mat['cantidad_inicial']
         precio_promedio = mat['precio_unitario']
         total_saldo = cant_saldo * precio_promedio
         
-        # Saldo Inicial
-        cw.writerow([
+        row = [
             mat['nombre'], mat['tipo_material'], '-', '-', 'Saldo Inicial', '', '',
             '', '', '', '', '', '',
             cant_saldo, round(precio_promedio, 2), round(total_saldo, 2)
-        ])
+        ]
+        ws.append(row)
+        for col_num, cell in enumerate(ws[ws.max_row], 1):
+            if 14 <= col_num <= 16: cell.fill = fill_celda_azul
+            cell.alignment = alignment_left if col_num <= 7 else alignment_right
+            cell.border = border_thin
         
         movs = conn.execute('SELECT * FROM movimientos WHERE material_id = ? ORDER BY fecha ASC, id ASC', (mat_id,)).fetchall()
         for mov in movs:
             doc = mov['documento'] or ''
             num_doc = mov['numero_documento'] or ''
             
-            # Calcular la semana del mes (Días 1-7 = Sem 1, Días 8-14 = Sem 2...)
             fecha_obj = datetime.strptime(mov['fecha'], '%Y-%m-%d')
             semana = f"Semana {(fecha_obj.day - 1) // 7 + 1}"
             
@@ -451,25 +520,55 @@ def exportar_kardex():
                 cant_saldo += mov['cantidad']
                 total_saldo += costo_mov
                 if cant_saldo > 0: precio_promedio = total_saldo / cant_saldo
-                cw.writerow([
+                row = [
                     mat['nombre'], mat['tipo_material'], mov['fecha'], semana, 'Entrada / Compra', doc, num_doc,
                     mov['cantidad'], round(mov['precio_unitario'], 2), round(costo_mov, 2),
                     '', '', '',
                     cant_saldo, round(precio_promedio, 2), round(total_saldo, 2)
-                ])
+                ]
+                ws.append(row)
+                for col_num, cell in enumerate(ws[ws.max_row], 1):
+                    if 8 <= col_num <= 10: cell.fill = fill_celda_verde
+                    elif 14 <= col_num <= 16: cell.fill = fill_celda_azul
+                    cell.alignment = alignment_left if col_num <= 7 else alignment_right
+                    cell.border = border_thin
+
             elif mov['tipo'] == 'salida':
                 costo_mov = mov['cantidad'] * precio_promedio
                 cant_saldo -= mov['cantidad']
                 total_saldo -= costo_mov
-                cw.writerow([
+                row = [
                     mat['nombre'], mat['tipo_material'], mov['fecha'], semana, 'Salida / Egreso', doc, num_doc,
                     '', '', '',
                     mov['cantidad'], round(precio_promedio, 2), round(costo_mov, 2),
                     cant_saldo, round(precio_promedio, 2), round(total_saldo, 2)
-                ])
+                ]
+                ws.append(row)
+                for col_num, cell in enumerate(ws[ws.max_row], 1):
+                    if 11 <= col_num <= 13: 
+                        cell.fill = fill_celda_naranja
+                        if col_num == 11: cell.font = font_naranja_bold
+                    elif 14 <= col_num <= 16: cell.fill = fill_celda_azul
+                    cell.alignment = alignment_left if col_num <= 7 else alignment_right
+                    cell.border = border_thin
+
+    # Ajustar ancho de las columnas automáticamente
+    for col in ws.columns:
+        max_length = 0
+        column = col[0].column_letter
+        for cell in col:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
+                pass
+        ws.column_dimensions[column].width = max_length + 2
+
     conn.close()
-    output = si.getvalue().encode('utf-8-sig')
-    return Response(output, mimetype='text/csv', headers={'Content-Disposition': 'attachment; filename=Kardex_General_Completo.csv'})
+    
+    output = BytesIO()
+    wb.save(output)
+    return Response(output.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers={'Content-Disposition': 'attachment; filename=Kardex_General_Completo.xlsx'})
 
 @app.route('/admin', methods=['GET', 'POST'])
 def admin():
