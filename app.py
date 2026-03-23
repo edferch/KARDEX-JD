@@ -766,6 +766,32 @@ def admin():
     conn.close()
     return render_template('admin.html', grupos=grupos, proveedores=proveedores, fuentes=fuentes)
 
+@app.route('/consultor')
+def consultor():
+    conn = get_db_connection()
+    materiales_db = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
+    stock_materiales = []
+
+    for mat in materiales_db:
+        mat_id = mat['id']
+        cant_saldo = mat['cantidad_inicial']
+        movimientos = conn.execute('SELECT tipo, cantidad FROM movimientos WHERE material_id = ?', (mat_id,)).fetchall()
+        
+        for mov in movimientos:
+            if mov['tipo'] == 'entrada':
+                cant_saldo += mov['cantidad']
+            elif mov['tipo'] == 'salida':
+                cant_saldo -= mov['cantidad']
+                
+        stock_materiales.append({
+            'nombre': mat['nombre'],
+            'grupo': mat['tipo_material'],
+            'unidad': mat['unidad'],
+            'stock': cant_saldo
+        })
+    conn.close()
+    return render_template('consultor.html', materiales=stock_materiales)
+
 if __name__ == '__main__':
     inicializar_db()
     app.run(host='0.0.0.0', port=3000, debug=True)

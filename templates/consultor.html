@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <style>
+        /* Ocultar el menú de navegación (y cualquier botón de regreso) aislando esta vista */
+        nav { display: none !important; }
+    </style>
+
+    <h2>Consulta de Existencias</h2>
+
+    <div class="kardex-tabla-contenedor">
+        <table class="kardex-tabla" style="min-width: auto; width: 100%;">
+            <thead>
+                <tr>
+                    <th class="hdr-gris col-texto">No.</th>
+                    <th class="hdr-gris col-texto">Material / Producto</th>
+                    <th class="hdr-gris col-texto">Grupo</th>
+                    <th class="hdr-gris col-texto">Unidad de Medida</th>
+                    <th class="hdr-azul" style="text-align: center; font-size: 14px;">Stock Disponible</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for mat in materiales %}
+                <tr>
+                    <td class="col-texto">{{ loop.index }}</td>
+                    <td class="col-texto" style="font-size: 16px;"><strong>{{ mat['nombre'] }}</strong></td>
+                    <td class="col-texto">{{ mat['grupo'] }}</td>
+                    <td class="col-texto">{{ mat['unidad'] }}</td>
+                    <td class="celda-azul" style="text-align: center; font-size: 18px; font-weight: bold; color: #1e3a8a;">{{ mat['stock'] }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" style="padding: 20px; text-align: center; color: #7f8c8d;">No hay materiales registrados.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}
