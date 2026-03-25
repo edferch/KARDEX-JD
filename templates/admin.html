@@ -67,6 +67,7 @@
                     <tr style="background-color: #f8fafc; text-align: left;">
                         <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; width: 40px;">ID</th>
                         <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Nombre</th>
+                        <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; width: 40px;"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -74,10 +75,13 @@
                     <tr>
                         <td style="padding: 8px; border-bottom: 1px solid #f1f5f9;">{{ grupo['id'] }}</td>
                         <td style="padding: 8px; border-bottom: 1px solid #f1f5f9;"><strong>{{ grupo['nombre'] }}</strong></td>
+                        <td style="padding: 8px; border-bottom: 1px solid #f1f5f9; text-align: right;">
+                            <button type="button" class="btn btn-salida" style="padding: 4px 8px; font-size: 12px; margin: 0; box-shadow: none;" onclick="confirmarEliminacionAdmin('/eliminar_grupo/{{ grupo['id'] }}')" title="Eliminar Grupo">🗑️</button>
+                        </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="2" style="padding: 10px; text-align: center; color: #7f8c8d;">No hay grupos registrados.</td>
+                        <td colspan="3" style="padding: 10px; text-align: center; color: #7f8c8d;">No hay grupos registrados.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -105,16 +109,20 @@
                     <thead>
                         <tr style="background-color: #f8fafc; text-align: left;">
                             <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Proveedor</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; width: 40px;"></th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for prov in proveedores %}
                         <tr>
                             <td style="padding: 8px; border-bottom: 1px solid #f1f5f9;"><strong>{{ prov['nombre'] }}</strong><br><small style="color: #64748b;">NIT: {{ prov['nit'] }} | ID: {{ prov['id'] }}</small></td>
+                            <td style="padding: 8px; border-bottom: 1px solid #f1f5f9; text-align: right;">
+                                <button type="button" class="btn btn-salida" style="padding: 4px 8px; font-size: 12px; margin: 0; box-shadow: none;" onclick="confirmarEliminacionAdmin('/eliminar_proveedor/{{ prov['id'] }}')" title="Eliminar Proveedor">🗑️</button>
+                            </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td style="padding: 10px; text-align: center; color: #7f8c8d;">No hay proveedores registrados.</td>
+                            <td colspan="2" style="padding: 10px; text-align: center; color: #7f8c8d;">No hay proveedores registrados.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -140,12 +148,16 @@
                 <thead>
                     <tr style="background-color: #f8fafc; text-align: left;">
                         <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Nombre de la Fuente</th>
+                        <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; width: 40px;"></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for fuente in fuentes %}
                     <tr>
                         <td style="padding: 8px; border-bottom: 1px solid #f1f5f9;"><strong>{{ fuente['nombre'] }}</strong></td>
+                        <td style="padding: 8px; border-bottom: 1px solid #f1f5f9; text-align: right;">
+                            <button type="button" class="btn btn-salida" style="padding: 4px 8px; font-size: 12px; margin: 0; box-shadow: none;" onclick="confirmarEliminacionAdmin('/eliminar_fuente/{{ fuente['id'] }}')" title="Eliminar Fuente">🗑️</button>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -156,5 +168,53 @@
     <div style="text-align: center; margin-top: 30px;">
         <a href="/" class="btn" style="background-color: #7f8c8d;">Volver al Inicio</a>
     </div>
+
+    <!-- Overlay y Modal para Eliminar con PIN -->
+    <div class="overlay" id="overlayEliminarAdmin" onclick="cerrarModalEliminarAdmin()" style="z-index: 1200;"></div>
+    
+    <div class="modal" id="modalEliminarAdmin" style="z-index: 1250; width: 350px;">
+        <h3 style="color: #e74c3c; margin-top: 0; text-align: center;">🗑️ Confirmar Eliminación</h3>
+        <p style="color: #64748b; font-size: 13px; text-align: center; margin-bottom: 20px;">Ingrese el PIN de seguridad (1234) para eliminar este registro permanentemente.</p>
+        <div class="form-grupo">
+            <input type="password" id="inputPinEliminarAdmin" placeholder="PIN..." autocomplete="off" style="text-align: center; font-size: 16px; letter-spacing: 2px;" onkeypress="if(event.key === 'Enter') ejecutarEliminacionAdmin();">
+        </div>
+        <div id="errorPinEliminarAdmin" style="color: #e74c3c; font-size: 12px; text-align: center; display: none; margin-top: -10px; margin-bottom: 10px;">❌ PIN incorrecto.</div>
+        <div class="modal-acciones">
+            <button type="button" class="btn btn-secundario" onclick="cerrarModalEliminarAdmin()">Cancelar</button>
+            <button type="button" class="btn btn-salida" onclick="ejecutarEliminacionAdmin()">Eliminar</button>
+        </div>
+    </div>
+
+    <script>
+        let formEliminarAdmin = null;
+
+        function confirmarEliminacionAdmin(actionUrl) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = actionUrl;
+            formEliminarAdmin = form;
+            
+            document.getElementById('modalEliminarAdmin').style.display = 'block';
+            document.getElementById('overlayEliminarAdmin').classList.add('activo');
+            document.getElementById('inputPinEliminarAdmin').value = '';
+            document.getElementById('errorPinEliminarAdmin').style.display = 'none';
+            document.getElementById('inputPinEliminarAdmin').focus();
+        }
+
+        function cerrarModalEliminarAdmin() {
+            document.getElementById('modalEliminarAdmin').style.display = 'none';
+            document.getElementById('overlayEliminarAdmin').classList.remove('activo');
+            formEliminarAdmin = null;
+        }
+
+        function ejecutarEliminacionAdmin() {
+            const pin = document.getElementById('inputPinEliminarAdmin').value;
+            if (pin === "1234") {
+                if (formEliminarAdmin) { document.body.appendChild(formEliminarAdmin); formEliminarAdmin.submit(); }
+            } else {
+                document.getElementById('errorPinEliminarAdmin').style.display = 'block';
+            }
+        }
+    </script>
     {% endif %}
 {% endblock %}

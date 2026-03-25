@@ -5,6 +5,8 @@
         <h2>Inventario</h2>
         <div style="display: flex; gap: 10px;">
             <a href="/exportar_inventario" class="btn" style="background-color: #10b981;">📥 Descargar Excel</a>
+            <button id="btnEditar" onclick="abrirPanelEditar()" class="btn" style="display: none; background-color: #f59e0b; box-shadow: 0 4px 6px -1px rgba(245, 158, 11, 0.3);">✏️ Editar</button>
+            <button id="btnEliminar" onclick="confirmarEliminacionMaterial()" class="btn btn-salida" style="display: none; box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.3);">🗑️ Eliminar</button>
             <button onclick="abrirPanel()" class="btn">+ Agregar Material</button>
         </div>
     </div>
@@ -20,6 +22,22 @@
         {% endfor %}
       {% endif %}
     {% endwith %}
+
+    <!-- Overlay y Modal para Eliminar con PIN -->
+    <div class="overlay" id="overlayEliminar" onclick="cerrarModalEliminar()" style="z-index: 1200;"></div>
+    
+    <div class="modal" id="modalEliminar" style="z-index: 1250; width: 350px;">
+        <h3 style="color: #e74c3c; margin-top: 0; text-align: center;">🗑️ Confirmar Eliminación</h3>
+        <p style="color: #64748b; font-size: 13px; text-align: center; margin-bottom: 20px;">Ingrese el PIN de seguridad (1234) para eliminar este material de forma permanente.</p>
+        <div class="form-grupo">
+            <input type="password" id="inputPinEliminar" placeholder="PIN..." autocomplete="off" style="text-align: center; font-size: 16px; letter-spacing: 2px;" onkeypress="if(event.key === 'Enter') ejecutarEliminacion();">
+        </div>
+        <div id="errorPinEliminar" style="color: #e74c3c; font-size: 12px; text-align: center; display: none; margin-top: -10px; margin-bottom: 10px;">❌ PIN incorrecto.</div>
+        <div class="modal-acciones">
+            <button type="button" class="btn btn-secundario" onclick="cerrarModalEliminar()">Cancelar</button>
+            <button type="button" class="btn btn-salida" onclick="ejecutarEliminacion()">Eliminar</button>
+        </div>
+    </div>
 
     <script>
         setTimeout(function() {
@@ -49,7 +67,18 @@
             </thead>
             <tbody>
                 {% for mat in materiales %}
-                <tr>
+                <tr onclick="seleccionarMaterial(this)" style="cursor: pointer; transition: background-color 0.2s;"
+                    data-id="{{ mat['id'] }}"
+                    data-nombre="{{ mat['nombre'] }}"
+                    data-tipo="{{ mat['tipo_material'] }}"
+                    data-metrico="{{ mat['numero_metrico'] or '' }}"
+                    data-origen="{{ mat['origen'] or '' }}"
+                    data-fuente="{{ mat['fuente'] or '' }}"
+                    data-empresa="{{ mat['empresa'] or '' }}"
+                    data-presentacion="{{ mat['presentacion'] or '' }}"
+                    data-unidad="{{ mat['unidad'] or '' }}"
+                    data-cant="{{ mat['cantidad_inicial'] }}"
+                    data-precio="{{ mat['precio_unitario'] }}">
                     <td class="col-texto">{{ loop.index }}</td>
                     <td class="col-texto"><strong>{{ mat['nombre'] }}</strong></td>
                     <td class="col-texto">{{ mat['tipo_material'] }}</td>
@@ -71,7 +100,7 @@
         </table>
     </div>
 
-    <div class="overlay" id="fondoOscuro" onclick="cerrarPanel()"></div>
+    <div class="overlay" id="fondoOscuro" onclick="cerrarPanel(); cerrarPanelEditar();"></div>
     
     <div class="panel-lateral" id="miPanel">
         <h3 style="margin-top: 0; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; color: #1e293b;">Nuevo Material</h3>
@@ -85,7 +114,7 @@
                         <option value="">Seleccione un grupo...</option>
                         {% for grupo in grupos %} <option value="{{ grupo['nombre'] }}">{{ grupo['nombre'] }}</option> {% endfor %} 
                     </select>
-                    <button type="button" class="btn" onclick="abrirModalGrupo()" style="padding: 0 15px; margin: 0; box-shadow: none;" title="Agregar grupo rápido">+</button>
+                    <button type="button" class="btn" onclick="abrirModalGrupo('selectGrupo')" style="padding: 0 15px; margin: 0; box-shadow: none;" title="Agregar grupo rápido">+</button>
                 </div>
 
                 <label>Fuente (Quién paga):</label>
@@ -100,7 +129,7 @@
                         <option value="">Seleccione un proveedor...</option>
                         {% for prov in proveedores %} <option value="{{ prov['nombre'] }}">{{ prov['nombre'] }} (ID: {{ prov['id'] }})</option> {% endfor %} 
                     </select>
-                    <button type="button" class="btn btn-entrada" onclick="abrirModalProveedor()" style="padding: 0 15px; margin: 0; box-shadow: none;" title="Agregar proveedor rápido">+</button>
+                    <button type="button" class="btn btn-entrada" onclick="abrirModalProveedor('selectProveedor')" style="padding: 0 15px; margin: 0; box-shadow: none;" title="Agregar proveedor rápido">+</button>
                 </div>
 
                 <label>No. Métrico:</label> <input type="text" name="numero_metrico">
@@ -113,6 +142,51 @@
             <div class="modal-acciones">
                 <button type="button" class="btn btn-secundario" onclick="cerrarPanel()">Cancelar</button>
                 <button type="submit" class="btn">Guardar Material</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="panel-lateral" id="panelEditar">
+        <h3 style="margin-top: 0; border-bottom: 2px solid #f59e0b; padding-bottom: 10px; color: #1e293b;">Editar Material</h3>
+        <form method="POST" action="/editar_material" autocomplete="off">
+            <input type="hidden" name="id" id="edit_id">
+            <div class="form-grupo">
+                <label>Nombre:</label> <input type="text" name="nombre" id="edit_nombre" required>
+                
+                <label>Grupo (Categoría):</label> 
+                <div style="display: flex; gap: 8px;">
+                    <select name="tipo_material" id="edit_tipo_material" required style="flex: 1;"> 
+                        <option value="">Seleccione un grupo...</option>
+                        {% for grupo in grupos %} <option value="{{ grupo['nombre'] }}">{{ grupo['nombre'] }}</option> {% endfor %} 
+                    </select>
+                    <button type="button" class="btn" onclick="abrirModalGrupo('edit_tipo_material')" style="padding: 0 15px; margin: 0; box-shadow: none;" title="Agregar grupo rápido">+</button>
+                </div>
+
+                <label>Fuente (Quién paga):</label>
+                <select name="fuente" id="edit_fuente" required>
+                    <option value="">Seleccione una fuente...</option>
+                    {% for f in fuentes %} <option value="{{ f['nombre'] }}">{{ f['nombre'] }}</option> {% endfor %}
+                </select>
+
+                <label>Empresa Proveedora:</label> 
+                <div style="display: flex; gap: 8px;">
+                    <select name="empresa" id="edit_empresa" required style="flex: 1;"> 
+                        <option value="">Seleccione un proveedor...</option>
+                        {% for prov in proveedores %} <option value="{{ prov['nombre'] }}">{{ prov['nombre'] }} (ID: {{ prov['id'] }})</option> {% endfor %} 
+                    </select>
+                    <button type="button" class="btn btn-entrada" onclick="abrirModalProveedor('edit_empresa')" style="padding: 0 15px; margin: 0; box-shadow: none;" title="Agregar proveedor rápido">+</button>
+                </div>
+
+                <label>No. Métrico:</label> <input type="text" name="numero_metrico" id="edit_numero_metrico">
+                <label>Origen:</label> <input type="text" name="origen" id="edit_origen">
+                <label>Presentación:</label> <input type="text" name="presentacion" id="edit_presentacion">
+                <label>Unidad de Medida:</label> <input type="text" name="unidad" id="edit_unidad">
+                <label>Existencia Inicial Física:</label> <input type="number" name="cantidad_inicial" id="edit_cantidad_inicial" required>
+                <label>Costo Unitario Inicial (Q):</label> <input type="number" step="0.01" name="precio_unitario" id="edit_precio_unitario" required>
+            </div>
+            <div class="modal-acciones">
+                <button type="button" class="btn btn-secundario" onclick="cerrarPanelEditar()">Cancelar</button>
+                <button type="submit" class="btn" style="background-color: #f59e0b;">Guardar Cambios</button>
             </div>
         </form>
     </div>
@@ -150,13 +224,60 @@
         function abrirPanel() { document.getElementById("miPanel").classList.add("abierto"); document.getElementById("fondoOscuro").classList.add("activo"); }
         function cerrarPanel() { document.getElementById("miPanel").classList.remove("abierto"); document.getElementById("fondoOscuro").classList.remove("activo"); }
         
-        function abrirModalGrupo() {
+        let materialSeleccionado = null;
+
+        function seleccionarMaterial(fila) {
+            document.querySelectorAll('.kardex-tabla tbody tr').forEach(function(tr) {
+                tr.style.backgroundColor = '';
+            });
+            
+            if (materialSeleccionado === fila) {
+                materialSeleccionado = null;
+                document.getElementById('btnEditar').style.display = 'none';
+                document.getElementById('btnEliminar').style.display = 'none';
+            } else {
+                materialSeleccionado = fila;
+                fila.style.backgroundColor = '#dbeafe';
+                document.getElementById('btnEditar').style.display = 'block';
+                document.getElementById('btnEliminar').style.display = 'block';
+            }
+        }
+
+        function abrirPanelEditar() {
+            if (!materialSeleccionado) return;
+            
+            document.getElementById('edit_id').value = materialSeleccionado.getAttribute('data-id');
+            document.getElementById('edit_nombre').value = materialSeleccionado.getAttribute('data-nombre');
+            document.getElementById('edit_tipo_material').value = materialSeleccionado.getAttribute('data-tipo');
+            document.getElementById('edit_fuente').value = materialSeleccionado.getAttribute('data-fuente');
+            document.getElementById('edit_empresa').value = materialSeleccionado.getAttribute('data-empresa');
+            document.getElementById('edit_numero_metrico').value = materialSeleccionado.getAttribute('data-metrico');
+            document.getElementById('edit_origen').value = materialSeleccionado.getAttribute('data-origen');
+            document.getElementById('edit_presentacion').value = materialSeleccionado.getAttribute('data-presentacion');
+            document.getElementById('edit_unidad').value = materialSeleccionado.getAttribute('data-unidad');
+            document.getElementById('edit_cantidad_inicial').value = materialSeleccionado.getAttribute('data-cant');
+            document.getElementById('edit_precio_unitario').value = materialSeleccionado.getAttribute('data-precio');
+
+            document.getElementById("panelEditar").classList.add("abierto");
+            document.getElementById("fondoOscuro").classList.add("activo");
+        }
+
+        function cerrarPanelEditar() {
+            document.getElementById("panelEditar").classList.remove("abierto");
+            document.getElementById("fondoOscuro").classList.remove("activo");
+        }
+
+        let selectDestinoGrupo = 'selectGrupo';
+        function abrirModalGrupo(targetId = 'selectGrupo') {
+            selectDestinoGrupo = targetId;
             document.getElementById("modalGrupo").style.display = 'block';
             document.getElementById("overlaySecundario").classList.add("activo");
             document.getElementById("nuevoNombreGrupo").focus();
         }
         
-        function abrirModalProveedor() {
+        let selectDestinoProveedor = 'selectProveedor';
+        function abrirModalProveedor(targetId = 'selectProveedor') {
+            selectDestinoProveedor = targetId;
             document.getElementById("modalProveedor").style.display = 'block';
             document.getElementById("overlaySecundario").classList.add("activo");
             document.getElementById("nuevoNitProveedor").focus();
@@ -184,7 +305,7 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    const select = document.getElementById('selectGrupo');
+                    const select = document.getElementById(selectDestinoGrupo);
                     select.options.add(new Option(data.nombre, data.nombre, false, true));
                     cerrarModalesSecundarios();
                 } else {
@@ -209,7 +330,7 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    const select = document.getElementById('selectProveedor');
+                    const select = document.getElementById(selectDestinoProveedor);
                     select.options.add(new Option(`${data.nombre} (ID: ${data.id})`, data.nombre, false, true));
                     cerrarModalesSecundarios();
                 } else {
@@ -217,6 +338,38 @@
                 }
             } catch (e) {
                 alert("Error de conexión al guardar el proveedor.");
+            }
+        }
+
+        let formEliminarPendiente = null;
+
+        function confirmarEliminacionMaterial() {
+            if (!materialSeleccionado) return;
+            const id = materialSeleccionado.getAttribute('data-id');
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `/eliminar_material/${id}`;
+            formEliminarPendiente = form;
+            
+            document.getElementById('modalEliminar').style.display = 'block';
+            document.getElementById('overlayEliminar').classList.add('activo');
+            document.getElementById('inputPinEliminar').value = '';
+            document.getElementById('errorPinEliminar').style.display = 'none';
+            document.getElementById('inputPinEliminar').focus();
+        }
+
+        function cerrarModalEliminar() {
+            document.getElementById('modalEliminar').style.display = 'none';
+            document.getElementById('overlayEliminar').classList.remove('activo');
+            formEliminarPendiente = null;
+        }
+
+        function ejecutarEliminacion() {
+            const pin = document.getElementById('inputPinEliminar').value;
+            if (pin === "1234") { // <-- PIN DE SEGURIDAD
+                if (formEliminarPendiente) { document.body.appendChild(formEliminarPendiente); formEliminarPendiente.submit(); }
+            } else {
+                document.getElementById('errorPinEliminar').style.display = 'block';
             }
         }
     </script>

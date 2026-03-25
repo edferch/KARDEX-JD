@@ -49,8 +49,12 @@
     {% endif %}
 
     <div style="margin: 20px 0; display: flex; flex-direction: column; gap: 15px;">
-        <!-- Barra de Filtrado -->
-        <div style="display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 15px;">
+        <!-- Barra de Filtrado y Búsqueda -->
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+            <div style="display: flex; gap: 10px; align-items: center; min-width: 300px; flex: 1;">
+                <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Buscar por nombre de material..." style="flex: 1; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; max-width: 400px;">
+                <button onclick="document.getElementById('searchInput').focus()" class="btn btn-secundario" style="padding: 8px 14px;" title="Atajo: Ctrl + F">🔍 Buscar</button>
+            </div>
             <form method="GET" action="/" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                 <label style="font-weight: 600; color: #475569;">Filtrar por Mes:</label>
                 <input type="month" name="mes" value="{{ mes_filtro if mes_filtro != 'todos' else '' }}" style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; color: #1e293b;">
@@ -99,7 +103,7 @@
                     <th class="hdr-naranja">Total</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="tabla-materiales">
                 {% for mat in materiales %}
                 <tr>
                     <td class="col-texto">{{ loop.index }}</td>
@@ -135,6 +139,11 @@
                     <td colspan="15" style="padding: 20px; text-align: center; color: #7f8c8d;">No hay materiales registrados.</td>
                 </tr>
                 {% endfor %}
+                <tr id="no-results" style="display: none;">
+                    <td colspan="15" style="padding: 20px; text-align: center; color: #7f8c8d; background-color: #f8fafc;">
+                        No se encontraron resultados para su búsqueda.
+                    </td>
+                </tr>
             </tbody>
         </table>
     </div>
@@ -222,6 +231,37 @@
     </div>
 
     <script>
+        function filterTable() {
+            const input = document.getElementById('searchInput');
+            const filter = input.value.toLowerCase();
+            const tbody = document.getElementById('tabla-materiales');
+            const rows = tbody.getElementsByTagName('tr');
+            let visibleRows = 0;
+
+            for (let i = 0; i < rows.length; i++) {
+                if (rows[i].id === 'no-results') continue; // Omitir la fila de "no resultados"
+
+                const nameCell = rows[i].getElementsByTagName("td")[1];
+                if (nameCell) {
+                    const txtValue = nameCell.textContent || nameCell.innerText;
+                    if (txtValue.toLowerCase().indexOf(filter) > -1) {
+                        rows[i].style.display = "";
+                        visibleRows++;
+                    } else {
+                        rows[i].style.display = "none";
+                    }
+                }
+            }
+            document.getElementById('no-results').style.display = visibleRows > 0 ? 'none' : '';
+        }
+
+        document.addEventListener('keydown', function(event) {
+            if (event.ctrlKey && event.key === 'f') {
+                event.preventDefault();
+                document.getElementById('searchInput').focus();
+            }
+        });
+
         function abrirModalMovimiento(modalId) {
             document.getElementById(modalId).style.display = 'block';
             document.getElementById("fondoOscuro").classList.add("activo");

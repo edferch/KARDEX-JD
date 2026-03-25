@@ -246,6 +246,33 @@ def inventario():
     conn.close()
     return render_template('inventario.html', materiales=materiales, grupos=grupos, proveedores=proveedores, fuentes=fuentes)
 
+@app.route('/editar_material', methods=['POST'])
+def editar_material():
+    if request.method == 'POST':
+        id_material = int(request.form['id'])
+        nombre = request.form['nombre']
+        tipo_material = request.form['tipo_material']
+        numero_metrico = request.form['numero_metrico']
+        origen = request.form['origen']
+        empresa = request.form['empresa']
+        presentacion = request.form['presentacion']
+        unidad = request.form['unidad']
+        cantidad_inicial = int(request.form['cantidad_inicial'])
+        precio_unitario = float(request.form['precio_unitario'])
+        fuente = request.form.get('fuente', '')
+
+        conn = get_db_connection()
+        conn.execute('''
+            UPDATE materiales 
+            SET nombre = ?, tipo_material = ?, numero_metrico = ?, origen = ?, empresa = ?, presentacion = ?, unidad = ?, cantidad_inicial = ?, precio_unitario = ?, fuente = ?
+            WHERE id = ?
+        ''', (nombre, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente, id_material))
+        conn.commit()
+        conn.close()
+
+        flash("Éxito: Material actualizado correctamente.", "success")
+        return redirect(url_for('inventario'))
+
 @app.route('/agregar_grupo_ajax', methods=['POST'])
 def agregar_grupo_ajax():
     nombre = request.json.get('nombre')
@@ -368,7 +395,8 @@ def eliminar_material(id):
         conn.execute('DELETE FROM materiales WHERE id = ?', (id,))
         conn.commit()
         conn.close()
-        return redirect(url_for('index'))
+        flash("Éxito: Material eliminado correctamente.", "success")
+        return redirect(url_for('inventario'))
 
 @app.route('/entradas')
 def entradas():
@@ -765,6 +793,33 @@ def admin():
     fuentes = conn.execute('SELECT * FROM fuentes ORDER BY nombre ASC').fetchall()
     conn.close()
     return render_template('admin.html', grupos=grupos, proveedores=proveedores, fuentes=fuentes)
+
+@app.route('/eliminar_grupo/<int:id>', methods=['POST'])
+def eliminar_grupo(id):
+    conn = get_db_connection()
+    conn.execute('DELETE FROM grupos WHERE id = ?', (id,))
+    conn.commit()
+    conn.close()
+    flash("Éxito: Grupo eliminado correctamente.", "success")
+    return redirect(url_for('admin'))
+
+@app.route('/eliminar_proveedor/<int:id>', methods=['POST'])
+def eliminar_proveedor(id):
+    conn = get_db_connection()
+    conn.execute('DELETE FROM proveedores WHERE id = ?', (id,))
+    conn.commit()
+    conn.close()
+    flash("Éxito: Proveedor eliminado correctamente.", "success")
+    return redirect(url_for('admin'))
+
+@app.route('/eliminar_fuente/<int:id>', methods=['POST'])
+def eliminar_fuente(id):
+    conn = get_db_connection()
+    conn.execute('DELETE FROM fuentes WHERE id = ?', (id,))
+    conn.commit()
+    conn.close()
+    flash("Éxito: Fuente eliminada correctamente.", "success")
+    return redirect(url_for('admin'))
 
 @app.route('/consultor')
 def consultor():

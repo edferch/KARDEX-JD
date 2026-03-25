@@ -1,12 +1,13 @@
 {% extends 'base.html' %}
 
 {% block content %}
-    <style>
-        /* Ocultar el menú de navegación (y cualquier botón de regreso) aislando esta vista */
-        nav { display: none !important; }
-    </style>
-
-    <h2>Consulta de Existencias</h2>
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+        <h2>Consulta de Existencias</h2>
+        <div style="display: flex; gap: 10px; align-items: center; min-width: 300px;">
+            <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Buscar por nombre de material..." style="flex: 1; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;">
+            <button onclick="document.getElementById('searchInput').focus()" class="btn btn-secundario" style="padding: 10px 14px;" title="Atajo: Ctrl + F">🔍 Buscar</button>
+        </div>
+    </div>
 
     <div class="kardex-tabla-contenedor">
         <table class="kardex-tabla" style="min-width: auto; width: 100%;">
@@ -19,7 +20,7 @@
                     <th class="hdr-azul" style="text-align: center; font-size: 14px;">Stock Disponible</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="tabla-materiales">
                 {% for mat in materiales %}
                 <tr>
                     <td class="col-texto">{{ loop.index }}</td>
@@ -33,7 +34,45 @@
                     <td colspan="5" style="padding: 20px; text-align: center; color: #7f8c8d;">No hay materiales registrados.</td>
                 </tr>
                 {% endfor %}
+                <tr id="no-results" style="display: none;">
+                    <td colspan="5" style="padding: 20px; text-align: center; color: #7f8c8d; background-color: #f8fafc;">
+                        No se encontraron resultados para su búsqueda.
+                    </td>
+                </tr>
             </tbody>
         </table>
     </div>
+
+    <script>
+        function filterTable() {
+            const input = document.getElementById('searchInput');
+            const filter = input.value.toLowerCase();
+            const tbody = document.getElementById('tabla-materiales');
+            const rows = tbody.getElementsByTagName('tr');
+            let visibleRows = 0;
+
+            for (let i = 0; i < rows.length; i++) {
+                if (rows[i].id === 'no-results') continue; // Omitir la fila de "no resultados"
+
+                const nameCell = rows[i].getElementsByTagName("td")[1];
+                if (nameCell) {
+                    const txtValue = nameCell.textContent || nameCell.innerText;
+                    if (txtValue.toLowerCase().indexOf(filter) > -1) {
+                        rows[i].style.display = "";
+                        visibleRows++;
+                    } else {
+                        rows[i].style.display = "none";
+                    }
+                }
+            }
+            document.getElementById('no-results').style.display = visibleRows > 0 ? 'none' : '';
+        }
+
+        document.addEventListener('keydown', function(event) {
+            if (event.ctrlKey && event.key === 'f') {
+                event.preventDefault();
+                document.getElementById('searchInput').focus();
+            }
+        });
+    </script>
 {% endblock %}
