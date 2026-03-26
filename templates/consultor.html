@@ -14,36 +14,16 @@
             <thead>
                 <tr>
                     <th class="hdr-gris col-texto">No.</th>
-                    <th class="hdr-gris col-texto">Material / Producto</th>
-                    <th class="hdr-gris col-texto">Grupo</th>
-                    <th class="hdr-gris col-texto">Unidad de Medida</th>
-                    <th class="hdr-azul" style="text-align: center; font-size: 14px;">Stock Disponible</th>
+                    <th class="hdr-gris col-texto">nt-size
+                    <td class="col-texto">{{ mat['unidad']e: 18px; font-weight: bold; color: #1e3a8a;">{{ mat['stock'] }}</td>
                 </tr>
-            </thead>
-            <tbody id="tabla-materiales">
-                {% for mat in materiales %}
-                <tr>
-                    <td class="col-texto">{{ loop.index }}</td>
-                    <td class="col-texto" style="font-size: 16px;"><strong>{{ mat['nombre'] }}</strong></td>
-                    <td class="col-texto">{{ mat['grupo'] }}</td>
-                    <td class="col-texto">{{ mat['unidad'] }}</td>
-                    <td class="celda-azul" style="text-align: center; font-size: 18px; font-weight: bold; color: #1e3a8a;">{{ mat['stock'] }}</td>
+                <tr>color: #7f8c8d;">No hay materiales registrados.</td>
                 </tr>
-                {% else %}
-                <tr>
-                    <td colspan="5" style="padding: 20px; text-align: center; color: #7f8c8d;">No hay materiales registrados.</td>
+                <tr id="no-results" style="display: none;"color: #7f8c8d; background-color: #f8fafc;">
+                        No se encontraron resultados para 
                 </tr>
-                {% endfor %}
-                <tr id="no-results" style="display: none;">
-                    <td colspan="5" style="padding: 20px; text-align: center; color: #7f8c8d; background-color: #f8fafc;">
-                        No se encontraron resultados para su búsqueda.
-                    </td>
-                </tr>
-            </tbody>
         </table>
-    </div>
 
-    <script>
         function filterTable() {
             const input = document.getElementById('searchInput');
             const filter = input.value.toLowerCase();

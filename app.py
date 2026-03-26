@@ -20,6 +20,7 @@ def inicializar_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS materiales (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            codigo TEXT,
             nombre TEXT NOT NULL,
             tipo_material TEXT,
             numero_metrico TEXT,
@@ -81,6 +82,12 @@ def inicializar_db():
     except sqlite3.OperationalError:
         pass
 
+    # Agregar la columna codigo a la tabla materiales si no existe
+    try:
+        cursor.execute('ALTER TABLE materiales ADD COLUMN codigo TEXT')
+    except sqlite3.OperationalError:
+        pass
+
     # Tabla de Grupos (Categorías/Fuentes)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS grupos (
@@ -109,7 +116,7 @@ def index():
     if not mes_filtro:
         mes_filtro = datetime.now().strftime('%Y-%m')
         
-    materiales_db = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
+    materiales_db = conn.execute('SELECT * FROM materiales ORDER BY codigo ASC, nombre ASC').fetchall()
     materiales_kardex = []
     
     alertas_rojas = []
@@ -191,6 +198,7 @@ def index():
 
         materiales_kardex.append({
             'id': mat['id'],
+            'codigo': mat['codigo'],
             'nombre': mat['nombre'],
             'tipo_material': mat['tipo_material'],
             'unidad': mat['unidad'],
@@ -216,6 +224,7 @@ def index():
 @app.route('/inventario', methods=['GET', 'POST'])
 def inventario():
     if request.method == 'POST':
+        codigo = request.form.get('codigo', '')
         nombre = request.form['nombre']
         tipo_material = request.form['tipo_material']
         numero_metrico = request.form['numero_metrico']
@@ -229,9 +238,9 @@ def inventario():
 
         conn = get_db_connection()
         conn.execute('''
-            INSERT INTO materiales (nombre, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (nombre, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente))
+            INSERT INTO materiales (codigo, nombre, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (codigo, nombre, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente))
         conn.commit()
         conn.close()
 
@@ -239,7 +248,7 @@ def inventario():
         return redirect(url_for('inventario'))
 
     conn = get_db_connection()
-    materiales = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
+    materiales = conn.execute('SELECT * FROM materiales ORDER BY codigo ASC, nombre ASC').fetchall()
     grupos = conn.execute('SELECT * FROM grupos ORDER BY nombre ASC').fetchall()
     proveedores = conn.execute('SELECT * FROM proveedores ORDER BY nombre ASC').fetchall()
     fuentes = conn.execute('SELECT * FROM fuentes ORDER BY nombre ASC').fetchall()
@@ -250,6 +259,7 @@ def inventario():
 def editar_material():
     if request.method == 'POST':
         id_material = int(request.form['id'])
+        codigo = request.form.get('codigo', '')
         nombre = request.form['nombre']
         tipo_material = request.form['tipo_material']
         numero_metrico = request.form['numero_metrico']
@@ -264,9 +274,9 @@ def editar_material():
         conn = get_db_connection()
         conn.execute('''
             UPDATE materiales 
-            SET nombre = ?, tipo_material = ?, numero_metrico = ?, origen = ?, empresa = ?, presentacion = ?, unidad = ?, cantidad_inicial = ?, precio_unitario = ?, fuente = ?
+            SET codigo = ?, nombre = ?, tipo_material = ?, numero_metrico = ?, origen = ?, empresa = ?, presentacion = ?, unidad = ?, cantidad_inicial = ?, precio_unitario = ?, fuente = ?
             WHERE id = ?
-        ''', (nombre, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente, id_material))
+        ''', (codigo, nombre, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente, id_material))
         conn.commit()
         conn.close()
 
@@ -304,6 +314,50 @@ def agregar_proveedor_ajax():
         nuevo_id = cursor.lastrowid
         conn.close()
         return jsonify({'success': True, 'id': nuevo_id, 'nombre': nombre})
+    except Exception as e:
+        conn.close()
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/editar_proveedor_ajax', methods=['POST'])
+def editar_proveedor_ajax():
+    data = request.json
+    id = data.get('id')
+    nit = data.get('nit', '')
+    nombre = data.get('nombre')
+    nombre_viejo = data.get('nombre_viejo')
+    
+    if not nombre:
+        return jsonify({'success': False, 'error': 'El nombre está vacío'})
+        
+    conn = get_db_connection()
+    try:
+        # Actualizar proveedor
+        conn.execute('UPDATE proveedores SET nit = ?, nombre = ? WHERE id = ?', (nit, nombre, id))
+        # Actualizar todos los materiales que usaban este proveedor al nuevo nombre
+        if nombre != nombre_viejo:
+            conn.execute('UPDATE materiales SET empresa = ? WHERE empresa = ?', (nombre, nombre_viejo))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True})
+    except Exception as e:
+        conn.close()
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/eliminar_proveedor_ajax', methods=['POST'])
+def eliminar_proveedor_ajax():
+    data = request.json
+    id = data.get('id')
+    pin = data.get('pin')
+    
+    if pin != '1234':
+        return jsonify({'success': False, 'error': 'PIN incorrecto'})
+        
+    conn = get_db_connection()
+    try:
+        conn.execute('DELETE FROM proveedores WHERE id = ?', (id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True})
     except Exception as e:
         conn.close()
         return jsonify({'success': False, 'error': str(e)})
@@ -401,21 +455,21 @@ def eliminar_material(id):
 @app.route('/entradas')
 def entradas():
     conn = get_db_connection()
-    materiales = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
+    materiales = conn.execute('SELECT * FROM materiales ORDER BY codigo ASC, nombre ASC').fetchall()
     conn.close()
     return render_template('entradas.html', materiales=materiales)
 
 @app.route('/salidas')
 def salidas():
     conn = get_db_connection()
-    materiales = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
+    materiales = conn.execute('SELECT * FROM materiales ORDER BY codigo ASC, nombre ASC').fetchall()
     conn.close()
     return render_template('salidas.html', materiales=materiales)
 
 @app.route('/reporte')
 def reporte():
     conn = get_db_connection()
-    materiales = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
+    materiales = conn.execute('SELECT * FROM materiales ORDER BY codigo ASC, nombre ASC').fetchall()
     
     selected_material_id = request.args.get('material_id', type=int)
     mes_filtro = request.args.get('mes')
@@ -502,7 +556,7 @@ def reporte():
 @app.route('/exportar_inventario')
 def exportar_inventario():
     conn = get_db_connection()
-    materiales = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
+    materiales = conn.execute('SELECT * FROM materiales ORDER BY codigo ASC, nombre ASC').fetchall()
     conn.close()
     
     wb = Workbook()
@@ -519,7 +573,7 @@ def exportar_inventario():
                          top=Side(style='thin', color='E2E8F0'), 
                          bottom=Side(style='thin', color='E2E8F0'))
 
-    headers = ['No.', 'Nombre', 'Grupo', 'No. Metrico', 'Origen', 'Fuente', 'Proveedor', 'Presentacion', 'Unidad', 'Existencia Inicial', 'Costo Unitario (Q)']
+    headers = ['Código', 'Nombre', 'Grupo', 'No. Metrico', 'Origen', 'Fuente', 'Proveedor', 'Presentacion', 'Unidad', 'Existencia Inicial', 'Costo Unitario (Q)']
     
     ws.append(headers)
     for col_num, cell in enumerate(ws[1], 1):
@@ -530,7 +584,7 @@ def exportar_inventario():
 
     for idx, mat in enumerate(materiales, 1):
         row = [
-            idx, mat['nombre'], mat['tipo_material'], mat['numero_metrico'],
+            mat['codigo'], mat['nombre'], mat['tipo_material'], mat['numero_metrico'],
             mat['origen'], mat['fuente'], mat['empresa'], mat['presentacion'],
             mat['unidad'], mat['cantidad_inicial'], round(mat['precio_unitario'], 2)
         ]
@@ -563,7 +617,7 @@ def exportar_kardex():
         mes_filtro = datetime.now().strftime('%Y-%m')
         
     conn = get_db_connection()
-    materiales = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
+    materiales = conn.execute('SELECT * FROM materiales ORDER BY codigo ASC, nombre ASC').fetchall()
     
     wb = Workbook()
     
@@ -594,7 +648,7 @@ def exportar_kardex():
     border_thin = Border(left=Side(style='thin', color='E2E8F0'), right=Side(style='thin', color='E2E8F0'), top=Side(style='thin', color='E2E8F0'), bottom=Side(style='thin', color='E2E8F0'))
 
     # --- CONFIGURAR HOJA: KARDEX RESUMIDO ---
-    headers_resumen = ['No.', 'Producto', 'Grupo', 'Unidad', 'Exist. Inicial', 'Entradas', 'Salidas', 'Exist. Final', 'Costo Prom. (Q)', 'Total (Q)']
+    headers_resumen = ['Código', 'Producto', 'Grupo', 'Unidad', 'Exist. Inicial', 'Entradas', 'Salidas', 'Exist. Final', 'Costo Prom. (Q)', 'Total (Q)']
     ws_resumen.append(headers_resumen)
     for col_num, cell in enumerate(ws_resumen[1], 1):
         if col_num == 6: cell.fill, cell.font = fill_hdr_verde, font_hdr_verde
@@ -712,7 +766,7 @@ def exportar_kardex():
 
         # AGREGAR FILA AL KARDEX RESUMIDO
         row_res = [
-            idx, mat['nombre'], mat['tipo_material'], mat['unidad'],
+            mat['codigo'], mat['nombre'], mat['tipo_material'], mat['unidad'],
             ini_cant, acum_ingresos, acum_salidas,
             cant_saldo, round(precio_promedio, 2), round(total_saldo, 2)
         ]
@@ -824,7 +878,7 @@ def eliminar_fuente(id):
 @app.route('/consultor')
 def consultor():
     conn = get_db_connection()
-    materiales_db = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
+    materiales_db = conn.execute('SELECT * FROM materiales ORDER BY codigo ASC, nombre ASC').fetchall()
     stock_materiales = []
 
     for mat in materiales_db:
@@ -839,6 +893,7 @@ def consultor():
                 cant_saldo -= mov['cantidad']
                 
         stock_materiales.append({
+            'codigo': mat['codigo'],
             'nombre': mat['nombre'],
             'grupo': mat['tipo_material'],
             'unidad': mat['unidad'],
