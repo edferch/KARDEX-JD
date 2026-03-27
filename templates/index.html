@@ -133,7 +133,15 @@
                 {% for mat in materiales %}
                 <tr>
                     <td class="col-texto">{{ loop.index }}</td>
-                    <td class="col-texto"><strong>{{ mat['nombre'] }}</strong></td>
+                    <td class="col-texto">
+                        {% if mat.drive_link %}
+                            <a href="{{ mat.drive_link }}" target="_blank" title="Abrir enlace de Drive" style="color: #2563eb; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                                <strong>{{ mat['nombre'] }}</strong>
+                            </a>
+                        {% else %}
+                            <strong>{{ mat['nombre'] }}</strong>
+                        {% endif %}
+                    </td>
                     <td class="col-texto">{{ mat['tipo_material'] }}</td>
                     
                     <td class="celda-amarilla">{{ mat['ini_cant'] }}</td>

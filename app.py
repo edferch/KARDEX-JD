@@ -87,6 +87,18 @@ def inicializar_db():
         cursor.execute('ALTER TABLE materiales ADD COLUMN codigo TEXT')
     except sqlite3.OperationalError:
         pass
+        
+    # Agregar la columna descripcion a la tabla materiales si no existe
+    try:
+        cursor.execute('ALTER TABLE materiales ADD COLUMN descripcion TEXT')
+    except sqlite3.OperationalError:
+        pass
+
+    # Agregar la columna de hipervínculo a la tabla materiales si no existe
+    try:
+        cursor.execute('ALTER TABLE materiales ADD COLUMN drive_link TEXT')
+    except sqlite3.OperationalError:
+        pass
 
     # Tabla de Grupos (Categorías/Fuentes)
     cursor.execute('''
@@ -200,6 +212,7 @@ def index():
             'id': mat['id'],
             'codigo': mat['codigo'],
             'nombre': mat['nombre'],
+            'drive_link': mat['drive_link'],
             'tipo_material': mat['tipo_material'],
             'unidad': mat['unidad'],
             'ini_cant': ini_cant,
@@ -226,6 +239,7 @@ def inventario():
     if request.method == 'POST':
         codigo = request.form.get('codigo', '')
         nombre = request.form['nombre']
+        descripcion = request.form.get('descripcion', '')
         tipo_material = request.form['tipo_material']
         numero_metrico = request.form['numero_metrico']
         origen = request.form['origen']
@@ -235,12 +249,13 @@ def inventario():
         cantidad_inicial = int(request.form['cantidad_inicial'])
         precio_unitario = float(request.form['precio_unitario'])
         fuente = request.form.get('fuente', '')
+        drive_link = request.form.get('drive_link', '')
 
         conn = get_db_connection()
         conn.execute('''
-            INSERT INTO materiales (codigo, nombre, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (codigo, nombre, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente))
+            INSERT INTO materiales (codigo, nombre, descripcion, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente, drive_link)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (codigo, nombre, descripcion, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente, drive_link))
         conn.commit()
         conn.close()
 
@@ -261,6 +276,7 @@ def editar_material():
         id_material = int(request.form['id'])
         codigo = request.form.get('codigo', '')
         nombre = request.form['nombre']
+        descripcion = request.form.get('descripcion', '')
         tipo_material = request.form['tipo_material']
         numero_metrico = request.form['numero_metrico']
         origen = request.form['origen']
@@ -270,13 +286,14 @@ def editar_material():
         cantidad_inicial = int(request.form['cantidad_inicial'])
         precio_unitario = float(request.form['precio_unitario'])
         fuente = request.form.get('fuente', '')
+        drive_link = request.form.get('drive_link', '')
 
         conn = get_db_connection()
         conn.execute('''
             UPDATE materiales 
-            SET codigo = ?, nombre = ?, tipo_material = ?, numero_metrico = ?, origen = ?, empresa = ?, presentacion = ?, unidad = ?, cantidad_inicial = ?, precio_unitario = ?, fuente = ?
+            SET codigo = ?, nombre = ?, descripcion = ?, tipo_material = ?, numero_metrico = ?, origen = ?, empresa = ?, presentacion = ?, unidad = ?, cantidad_inicial = ?, precio_unitario = ?, fuente = ?, drive_link = ?
             WHERE id = ?
-        ''', (codigo, nombre, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente, id_material))
+        ''', (codigo, nombre, descripcion, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente, drive_link, id_material))
         conn.commit()
         conn.close()
 
@@ -299,6 +316,71 @@ def agregar_grupo_ajax():
     except sqlite3.IntegrityError:
         conn.close()
         return jsonify({'success': False, 'error': 'El grupo ya existe'})
+
+@app.route('/editar_grupo_ajax', methods=['POST'])
+def editar_grupo_ajax():
+    data = request.json
+    id = data.get('id')
+    nombre = data.get('nombre')
+    nombre_viejo = data.get('nombre_viejo')
+    
+    if not nombre:
+        return jsonify({'success': False, 'error': 'El nombre está vacío'})
+        
+    conn = get_db_connection()
+    try:
+        # Actualizar grupo
+        conn.execute('UPDATE grupos SET nombre = ? WHERE id = ?', (nombre, id))
+        # Actualizar todos los materiales que usaban este grupo al nuevo nombre
+        if nombre != nombre_viejo:
+            conn.execute('UPDATE materiales SET tipo_material = ? WHERE tipo_material = ?', (nombre, nombre_viejo))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True})
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({'success': False, 'error': 'El grupo ya existe'})
+    except Exception as e:
+        conn.close()
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/eliminar_grupo_ajax', methods=['POST'])
+def eliminar_grupo_ajax():
+    data = request.json
+    id = data.get('id')
+    pin = data.get('pin')
+    
+    if pin != '1234':
+        return jsonify({'success': False, 'error': 'PIN incorrecto'})
+        
+    conn = get_db_connection()
+    try:
+        conn.execute('DELETE FROM grupos WHERE id = ?', (id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True})
+    except Exception as e:
+        conn.close()
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/actualizar_vinculo_ajax', methods=['POST'])
+def actualizar_vinculo_ajax():
+    data = request.json
+    material_id = data.get('material_id')
+    link = data.get('link', '')
+
+    if not material_id:
+        return jsonify({'success': False, 'error': 'ID de material no proporcionado'})
+
+    conn = get_db_connection()
+    try:
+        conn.execute('UPDATE materiales SET drive_link = ? WHERE id = ?', (link, material_id))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True})
+    except Exception as e:
+        conn.close()
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/agregar_proveedor_ajax', methods=['POST'])
 def agregar_proveedor_ajax():
@@ -892,13 +974,12 @@ def consultor():
             elif mov['tipo'] == 'salida':
                 cant_saldo -= mov['cantidad']
                 
-        stock_materiales.append({
-            'codigo': mat['codigo'],
-            'nombre': mat['nombre'],
-            'grupo': mat['tipo_material'],
-            'unidad': mat['unidad'],
-            'stock': cant_saldo
-        })
+        # Convertir la fila de la base de datos (sqlite3.Row) a un diccionario normal.
+        material_info = dict(mat)
+        # Añadir el stock calculado a este diccionario.
+        material_info['stock'] = cant_saldo
+        
+        stock_materiales.append(material_info)
     conn.close()
     return render_template('consultor.html', materiales=stock_materiales)
 

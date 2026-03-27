@@ -23,22 +23,6 @@
       {% endif %}
     {% endwith %}
 
-    <!-- Overlay y Modal para Eliminar con PIN -->
-    <div class="overlay" id="overlayEliminar" onclick="cerrarModalEliminar()" style="z-index: 1200;"></div>
-    
-    <div class="modal" id="modalEliminar" style="z-index: 1250; width: 350px;">
-        <h3 style="color: #e74c3c; margin-top: 0; text-align: center;">🗑️ Confirmar Eliminación</h3>
-        <p style="color: #64748b; font-size: 13px; text-align: center; margin-bottom: 20px;">Ingrese el PIN de seguridad (1234) para eliminar este material de forma permanente.</p>
-        <div class="form-grupo">
-            <input type="password" id="inputPinEliminar" placeholder="PIN..." autocomplete="off" style="text-align: center; font-size: 16px; letter-spacing: 2px;" onkeypress="if(event.key === 'Enter') ejecutarEliminacion();">
-        </div>
-        <div id="errorPinEliminar" style="color: #e74c3c; font-size: 12px; text-align: center; display: none; margin-top: -10px; margin-bottom: 10px;">❌ PIN incorrecto.</div>
-        <div class="modal-acciones">
-            <button type="button" class="btn btn-secundario" onclick="cerrarModalEliminar()">Cancelar</button>
-            <button type="button" class="btn btn-salida" onclick="ejecutarEliminacion()">Eliminar</button>
-        </div>
-    </div>
-
     <script>
         setTimeout(function() {
             document.querySelectorAll('.flash-mensaje').forEach(function(msg) {
@@ -52,8 +36,9 @@
         <table class="kardex-tabla">
             <thead>
                 <tr>
-                    <th class="hdr-gris col-texto">No.</th>
-                    <th class="hdr-gris col-texto">Nombre</th>
+                    <th class="hdr-gris col-texto">ID</th>
+                    <th class="hdr-gris col-texto">Código y Nombre</th>
+                    <th class="hdr-gris col-texto">Descripción</th>
                     <th class="hdr-gris col-texto">Grupo</th>
                     <th class="hdr-gris col-texto">No. Métrico</th>
                     <th class="hdr-gris col-texto">Origen</th>
@@ -69,18 +54,30 @@
                 {% for mat in materiales %}
                 <tr onclick="seleccionarMaterial(this)" style="cursor: pointer; transition: background-color 0.2s;"
                     data-id="{{ mat['id'] }}"
+                    data-codigo="{{ mat['codigo'] or '' }}"
                     data-nombre="{{ mat['nombre'] }}"
+                    data-descripcion="{{ mat['descripcion'] or '' }}"
                     data-tipo="{{ mat['tipo_material'] }}"
                     data-metrico="{{ mat['numero_metrico'] or '' }}"
                     data-origen="{{ mat['origen'] or '' }}"
                     data-fuente="{{ mat['fuente'] or '' }}"
                     data-empresa="{{ mat['empresa'] or '' }}"
+                    data-drive-link="{{ mat['drive_link'] or '' }}"
                     data-presentacion="{{ mat['presentacion'] or '' }}"
                     data-unidad="{{ mat['unidad'] or '' }}"
                     data-cant="{{ mat['cantidad_inicial'] }}"
                     data-precio="{{ mat['precio_unitario'] }}">
-                    <td class="col-texto">{{ loop.index }}</td>
-                    <td class="col-texto"><strong>{{ mat['nombre'] }}</strong></td>
+                    <td class="col-texto">{{ mat['id'] }}</td>
+                    <td class="col-texto" oncontextmenu="abrirMenuVinculo(event, this)">
+                        {% if mat['drive_link'] %}
+                            <a href="{{ mat['drive_link'] }}" target="_blank" title="Abrir enlace de Drive" style="color: #2563eb; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                                <strong>{% if mat['codigo'] %}{{ mat['codigo'] }} - {% endif %}{{ mat['nombre'] }}</strong>
+                            </a>
+                        {% else %}
+                            <strong>{% if mat['codigo'] %}{{ mat['codigo'] }} - {% endif %}{{ mat['nombre'] }}</strong>
+                        {% endif %}
+                    </td>
+                    <td class="col-texto">{{ mat['descripcion'] }}</td>
                     <td class="col-texto">{{ mat['tipo_material'] }}</td>
                     <td class="col-texto">{{ mat['numero_metrico'] }}</td>
                     <td class="col-texto">{{ mat['origen'] }}</td>
@@ -93,7 +90,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="10" style="padding: 20px; text-align: center; color: #7f8c8d;">No hay materiales registrados en el inventario.</td>
+                    <td colspan="12" style="padding: 20px; text-align: center; color: #7f8c8d;">No hay materiales registrados en el inventario.</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -106,13 +103,16 @@
         <h3 style="margin-top: 0; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; color: #1e293b;">Nuevo Material</h3>
         <form method="POST" action="/inventario" autocomplete="off">
             <div class="form-grupo">
+                <label>Código:</label> <input type="text" name="codigo" required>
                 <label>Nombre:</label> <input type="text" name="nombre" required>
+                <label>Descripción:</label>
+                <textarea name="descripcion" rows="3" style="padding: 12px 16px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; box-sizing: border-box; font-size: 15px; color: #1e293b; background-color: #f8fafc; transition: all 0.2s; font-family: inherit;"></textarea>
                 
                 <label>Grupo (Categoría):</label> 
                 <div style="display: flex; gap: 8px;">
                     <select name="tipo_material" id="selectGrupo" required style="flex: 1;"> 
                         <option value="">Seleccione un grupo...</option>
-                        {% for grupo in grupos %} <option value="{{ grupo['nombre'] }}">{{ grupo['nombre'] }}</option> {% endfor %} 
+                        {% for grupo in grupos %} <option value="{{ grupo['nombre'] }}" data-id="{{ grupo['id'] }}">{{ grupo['nombre'] }}</option> {% endfor %} 
                     </select>
                     <button type="button" class="btn" onclick="abrirModalGrupo('selectGrupo')" style="padding: 0 15px; margin: 0; box-shadow: none;" title="Agregar grupo rápido">+</button>
                 </div>
@@ -127,7 +127,7 @@
                 <div style="display: flex; gap: 8px;">
                     <select name="empresa" id="selectProveedor" required style="flex: 1;"> 
                         <option value="">Seleccione un proveedor...</option>
-                        {% for prov in proveedores %} <option value="{{ prov['nombre'] }}">{{ prov['nombre'] }} (ID: {{ prov['id'] }})</option> {% endfor %} 
+                        {% for prov in proveedores %} <option value="{{ prov['nombre'] }}" data-id="{{ prov['id'] }}" data-nit="{{ prov['nit'] }}">{{ prov['nombre'] }}</option> {% endfor %} 
                     </select>
                     <button type="button" class="btn btn-entrada" onclick="abrirModalProveedor('selectProveedor')" style="padding: 0 15px; margin: 0; box-shadow: none;" title="Agregar proveedor rápido">+</button>
                 </div>
@@ -146,18 +146,22 @@
         </form>
     </div>
 
+    <!-- Panel Lateral de Edición -->
     <div class="panel-lateral" id="panelEditar">
         <h3 style="margin-top: 0; border-bottom: 2px solid #f59e0b; padding-bottom: 10px; color: #1e293b;">Editar Material</h3>
         <form method="POST" action="/editar_material" autocomplete="off">
             <input type="hidden" name="id" id="edit_id">
             <div class="form-grupo">
+                <label>Código:</label> <input type="text" name="codigo" id="edit_codigo" required>
                 <label>Nombre:</label> <input type="text" name="nombre" id="edit_nombre" required>
+                <label>Descripción:</label>
+                <textarea name="descripcion" id="edit_descripcion" rows="3" style="padding: 12px 16px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; box-sizing: border-box; font-size: 15px; color: #1e293b; background-color: #f8fafc; transition: all 0.2s; font-family: inherit;"></textarea>
                 
                 <label>Grupo (Categoría):</label> 
                 <div style="display: flex; gap: 8px;">
                     <select name="tipo_material" id="edit_tipo_material" required style="flex: 1;"> 
                         <option value="">Seleccione un grupo...</option>
-                        {% for grupo in grupos %} <option value="{{ grupo['nombre'] }}">{{ grupo['nombre'] }}</option> {% endfor %} 
+                        {% for grupo in grupos %} <option value="{{ grupo['nombre'] }}" data-id="{{ grupo['id'] }}">{{ grupo['nombre'] }}</option> {% endfor %} 
                     </select>
                     <button type="button" class="btn" onclick="abrirModalGrupo('edit_tipo_material')" style="padding: 0 15px; margin: 0; box-shadow: none;" title="Agregar grupo rápido">+</button>
                 </div>
@@ -172,7 +176,7 @@
                 <div style="display: flex; gap: 8px;">
                     <select name="empresa" id="edit_empresa" required style="flex: 1;"> 
                         <option value="">Seleccione un proveedor...</option>
-                        {% for prov in proveedores %} <option value="{{ prov['nombre'] }}">{{ prov['nombre'] }} (ID: {{ prov['id'] }})</option> {% endfor %} 
+                        {% for prov in proveedores %} <option value="{{ prov['nombre'] }}" data-id="{{ prov['id'] }}" data-nit="{{ prov['nit'] }}">{{ prov['nombre'] }}</option> {% endfor %} 
                     </select>
                     <button type="button" class="btn btn-entrada" onclick="abrirModalProveedor('edit_empresa')" style="padding: 0 15px; margin: 0; box-shadow: none;" title="Agregar proveedor rápido">+</button>
                 </div>
@@ -220,10 +224,115 @@
         </div>
     </div>
 
+    <!-- Modal para Vínculo -->
+    <div class="modal" id="modalVinculo" style="z-index: 1100;">
+        <h3 style="color: #3b82f6; margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">Agregar/Editar Vínculo</h3>
+        <div class="form-grupo">
+            <input type="hidden" id="vinculoMaterialId">
+            <label>URL del Vínculo (Ej: Google Drive):</label>
+            <input type="url" id="inputVinculoUrl" placeholder="https://..." autocomplete="off">
+        </div>
+        <div class="modal-acciones">
+            <button type="button" class="btn btn-secundario" onclick="cerrarModalesSecundarios()">Cancelar</button>
+            <button type="button" class="btn" onclick="guardarVinculoAjax()">Guardar Vínculo</button>
+        </div>
+    </div>
+
+    <!-- Modal para Editar Grupo -->
+    <div class="modal" id="modalEditarGrupo" style="z-index: 1100;">
+        <h3 style="color: #f59e0b; margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">Editar Grupo</h3>
+        <div class="form-grupo">
+            <input type="hidden" id="editGrupoId">
+            <input type="hidden" id="editGrupoNombreViejo">
+            <label>Nombre del Grupo:</label>
+            <input type="text" id="editGrupoNombre" autocomplete="off">
+        </div>
+        <div class="modal-acciones">
+            <button type="button" class="btn btn-secundario" onclick="cerrarModalesSecundarios()">Cancelar</button>
+            <button type="button" class="btn" style="background-color: #f59e0b;" onclick="guardarEdicionGrupoAjax()">Guardar Cambios</button>
+        </div>
+    </div>
+
+    <!-- Modal PIN para Eliminar Grupo -->
+    <div class="modal" id="modalEliminarGrupoPin" style="z-index: 1250; width: 350px;">
+        <h3 style="color: #e74c3c; margin-top: 0; text-align: center;">🗑️ Confirmar Eliminación</h3>
+        <p style="color: #64748b; font-size: 13px; text-align: center; margin-bottom: 20px;">Ingrese el PIN de seguridad (1234) para eliminar este grupo permanentemente.</p>
+        <div class="form-grupo">
+            <input type="password" id="inputPinEliminarGrupo" placeholder="PIN..." autocomplete="off" style="text-align: center; font-size: 16px; letter-spacing: 2px;" onkeypress="if(event.key === 'Enter') ejecutarEliminarGrupoAjax();">
+        </div>
+        <div id="errorPinEliminarGrupo" style="color: #e74c3c; font-size: 12px; text-align: center; display: none; margin-top: -10px; margin-bottom: 10px;">❌ PIN incorrecto.</div>
+        <div class="modal-acciones">
+            <button type="button" class="btn btn-secundario" onclick="cerrarModalesSecundarios()">Cancelar</button>
+            <button type="button" class="btn btn-salida" onclick="ejecutarEliminarGrupoAjax()">Eliminar</button>
+        </div>
+    </div>
+
+    <!-- Modal para Editar Proveedor -->
+    <div class="modal" id="modalEditarProveedor" style="z-index: 1100;">
+        <h3 style="color: #f59e0b; margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">Editar Proveedor</h3>
+        <div class="form-grupo">
+            <input type="hidden" id="editProvId">
+            <input type="hidden" id="editProvNombreViejo">
+            <label>NIT:</label>
+            <input type="text" id="editProvNit" autocomplete="off">
+            <label>Nombre del Proveedor:</label>
+            <input type="text" id="editProvNombre" autocomplete="off">
+        </div>
+        <div class="modal-acciones">
+            <button type="button" class="btn btn-secundario" onclick="cerrarModalesSecundarios()">Cancelar</button>
+            <button type="button" class="btn" style="background-color: #f59e0b;" onclick="guardarEdicionProveedorAjax()">Guardar Cambios</button>
+        </div>
+    </div>
+
+    <!-- Modal PIN para Eliminar Proveedor -->
+    <div class="modal" id="modalEliminarProveedorPin" style="z-index: 1250; width: 350px;">
+        <h3 style="color: #e74c3c; margin-top: 0; text-align: center;">🗑️ Confirmar Eliminación</h3>
+        <p style="color: #64748b; font-size: 13px; text-align: center; margin-bottom: 20px;">Ingrese el PIN de seguridad (1234) para eliminar este proveedor permanentemente.</p>
+        <div class="form-grupo">
+            <input type="password" id="inputPinEliminarProv" placeholder="PIN..." autocomplete="off" style="text-align: center; font-size: 16px; letter-spacing: 2px;" onkeypress="if(event.key === 'Enter') ejecutarEliminarProveedorAjax();">
+        </div>
+        <div id="errorPinEliminarProv" style="color: #e74c3c; font-size: 12px; text-align: center; display: none; margin-top: -10px; margin-bottom: 10px;">❌ PIN incorrecto.</div>
+        <div class="modal-acciones">
+            <button type="button" class="btn btn-secundario" onclick="cerrarModalesSecundarios()">Cancelar</button>
+            <button type="button" class="btn btn-salida" onclick="ejecutarEliminarProveedorAjax()">Eliminar</button>
+        </div>
+    </div>
+
+    <!-- Overlay y Modal para Eliminar Material con PIN -->
+    <div class="overlay" id="overlayEliminar" onclick="cerrarModalEliminar()" style="z-index: 1200;"></div>
+    
+    <div class="modal" id="modalEliminar" style="z-index: 1250; width: 350px;">
+        <h3 style="color: #e74c3c; margin-top: 0; text-align: center;">🗑️ Confirmar Eliminación</h3>
+        <p style="color: #64748b; font-size: 13px; text-align: center; margin-bottom: 20px;">Ingrese el PIN de seguridad (1234) para eliminar este material de forma permanente.</p>
+        <div class="form-grupo">
+            <input type="password" id="inputPinEliminar" placeholder="PIN..." autocomplete="off" style="text-align: center; font-size: 16px; letter-spacing: 2px;" onkeypress="if(event.key === 'Enter') ejecutarEliminacion();">
+        </div>
+        <div id="errorPinEliminar" style="color: #e74c3c; font-size: 12px; text-align: center; display: none; margin-top: -10px; margin-bottom: 10px;">❌ PIN incorrecto.</div>
+        <div class="modal-acciones">
+            <button type="button" class="btn btn-secundario" onclick="cerrarModalEliminar()">Cancelar</button>
+            <button type="button" class="btn btn-salida" onclick="ejecutarEliminacion()">Eliminar</button>
+        </div>
+    </div>
+
+    <!-- Menú Contextual (Click Derecho) para Grupos -->
+    <div id="contextMenuGrupo" style="display: none; position: absolute; background: white; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); z-index: 2000; padding: 5px 0; min-width: 180px;">
+        <div onclick="abrirEditarGrupo()" onmouseover="this.style.backgroundColor='#f1f5f9'" onmouseout="this.style.backgroundColor='transparent'" style="padding: 10px 15px; cursor: pointer; color: #334155; font-size: 14px; transition: background 0.2s;">✏️ Editar Grupo</div>
+        <div onclick="confirmarEliminarGrupo()" onmouseover="this.style.backgroundColor='#fef2f2'" onmouseout="this.style.backgroundColor='transparent'" style="padding: 10px 15px; cursor: pointer; color: #e74c3c; font-size: 14px; transition: background 0.2s;">🗑️ Eliminar Grupo</div>
+    </div>
+
+    <!-- Menú Contextual (Click Derecho) para Proveedores -->
+    <div id="contextMenuProveedor" style="display: none; position: absolute; background: white; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); z-index: 2000; padding: 5px 0; min-width: 180px;">
+        <div onclick="abrirEditarProveedor()" onmouseover="this.style.backgroundColor='#f1f5f9'" onmouseout="this.style.backgroundColor='transparent'" style="padding: 10px 15px; cursor: pointer; color: #334155; font-size: 14px; transition: background 0.2s;">✏️ Editar Proveedor</div>
+        <div onclick="confirmarEliminarProveedor()" onmouseover="this.style.backgroundColor='#fef2f2'" onmouseout="this.style.backgroundColor='transparent'" style="padding: 10px 15px; cursor: pointer; color: #e74c3c; font-size: 14px; transition: background 0.2s;">🗑️ Eliminar Proveedor</div>
+    </div>
+
+    <!-- Menú Contextual para Vínculo -->
+    <div id="contextMenuVinculo" style="display: none; position: absolute; background: white; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); z-index: 2000; padding: 5px 0; min-width: 220px;">
+        <div onclick="abrirModalVinculo()" onmouseover="this.style.backgroundColor='#f1f5f9'" onmouseout="this.style.backgroundColor='transparent'" style="padding: 10px 15px; cursor: pointer; color: #334155; font-size: 14px; transition: background 0.2s;">🔗 Agregar/Editar Vínculo</div>
+    </div>
+
     <script>
-        function abrirPanel() { document.getElementById("miPanel").classList.add("abierto"); document.getElementById("fondoOscuro").classList.add("activo"); }
-        function cerrarPanel() { document.getElementById("miPanel").classList.remove("abierto"); document.getElementById("fondoOscuro").classList.remove("activo"); }
-        
+        // --- SELECCIÓN DE MATERIAL PARA EDITAR/ELIMINAR ---
         let materialSeleccionado = null;
 
         function seleccionarMaterial(fila) {
@@ -238,8 +347,8 @@
             } else {
                 materialSeleccionado = fila;
                 fila.style.backgroundColor = '#dbeafe';
-                document.getElementById('btnEditar').style.display = 'block';
-                document.getElementById('btnEliminar').style.display = 'block';
+                document.getElementById('btnEditar').style.display = 'inline-block';
+                document.getElementById('btnEliminar').style.display = 'inline-block';
             }
         }
 
@@ -247,7 +356,9 @@
             if (!materialSeleccionado) return;
             
             document.getElementById('edit_id').value = materialSeleccionado.getAttribute('data-id');
+            document.getElementById('edit_codigo').value = materialSeleccionado.getAttribute('data-codigo');
             document.getElementById('edit_nombre').value = materialSeleccionado.getAttribute('data-nombre');
+            document.getElementById('edit_descripcion').value = materialSeleccionado.getAttribute('data-descripcion');
             document.getElementById('edit_tipo_material').value = materialSeleccionado.getAttribute('data-tipo');
             document.getElementById('edit_fuente').value = materialSeleccionado.getAttribute('data-fuente');
             document.getElementById('edit_empresa').value = materialSeleccionado.getAttribute('data-empresa');
@@ -267,80 +378,7 @@
             document.getElementById("fondoOscuro").classList.remove("activo");
         }
 
-        let selectDestinoGrupo = 'selectGrupo';
-        function abrirModalGrupo(targetId = 'selectGrupo') {
-            selectDestinoGrupo = targetId;
-            document.getElementById("modalGrupo").style.display = 'block';
-            document.getElementById("overlaySecundario").classList.add("activo");
-            document.getElementById("nuevoNombreGrupo").focus();
-        }
-        
-        let selectDestinoProveedor = 'selectProveedor';
-        function abrirModalProveedor(targetId = 'selectProveedor') {
-            selectDestinoProveedor = targetId;
-            document.getElementById("modalProveedor").style.display = 'block';
-            document.getElementById("overlaySecundario").classList.add("activo");
-            document.getElementById("nuevoNitProveedor").focus();
-        }
-
-        function cerrarModalesSecundarios() {
-            document.getElementById("modalGrupo").style.display = 'none';
-            document.getElementById("modalProveedor").style.display = 'none';
-            document.getElementById("overlaySecundario").classList.remove("activo");
-            document.getElementById("nuevoNombreGrupo").value = '';
-            document.getElementById("nuevoNitProveedor").value = '';
-            document.getElementById("nuevoNombreProveedor").value = '';
-        }
-
-        async function guardarGrupoAjax() {
-            const nombre = document.getElementById("nuevoNombreGrupo").value.trim();
-            if (!nombre) { alert("El nombre del grupo es obligatorio."); return; }
-            
-            try {
-                const response = await fetch('/agregar_grupo_ajax', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ nombre: nombre })
-                });
-                const data = await response.json();
-                
-                if (data.success) {
-                    const select = document.getElementById(selectDestinoGrupo);
-                    select.options.add(new Option(data.nombre, data.nombre, false, true));
-                    cerrarModalesSecundarios();
-                } else {
-                    alert("❌ Error: " + data.error);
-                }
-            } catch (e) {
-                alert("Error de conexión al guardar el grupo.");
-            }
-        }
-
-        async function guardarProveedorAjax() {
-            const nit = document.getElementById("nuevoNitProveedor").value.trim();
-            const nombre = document.getElementById("nuevoNombreProveedor").value.trim();
-            if (!nombre) { alert("El nombre del proveedor es obligatorio."); return; }
-
-            try {
-                const response = await fetch('/agregar_proveedor_ajax', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ nit: nit, nombre: nombre })
-                });
-                const data = await response.json();
-                
-                if (data.success) {
-                    const select = document.getElementById(selectDestinoProveedor);
-                    select.options.add(new Option(`${data.nombre} (ID: ${data.id})`, data.nombre, false, true));
-                    cerrarModalesSecundarios();
-                } else {
-                    alert("❌ Error: " + data.error);
-                }
-            } catch (e) {
-                alert("Error de conexión al guardar el proveedor.");
-            }
-        }
-
+        // --- ELIMINAR MATERIAL ---
         let formEliminarPendiente = null;
 
         function confirmarEliminacionMaterial() {
@@ -366,11 +404,393 @@
 
         function ejecutarEliminacion() {
             const pin = document.getElementById('inputPinEliminar').value;
-            if (pin === "1234") { // <-- PIN DE SEGURIDAD
+            if (pin === "1234") { 
                 if (formEliminarPendiente) { document.body.appendChild(formEliminarPendiente); formEliminarPendiente.submit(); }
             } else {
                 document.getElementById('errorPinEliminar').style.display = 'block';
             }
+        }
+
+        // --- PANELES Y MODALES ---
+        function abrirPanel() { document.getElementById("miPanel").classList.add("abierto"); document.getElementById("fondoOscuro").classList.add("activo"); }
+        function cerrarPanel() { document.getElementById("miPanel").classList.remove("abierto"); document.getElementById("fondoOscuro").classList.remove("activo"); }
+        
+        let selectDestinoGrupo = 'selectGrupo';
+        function abrirModalGrupo(targetId = 'selectGrupo') {
+            selectDestinoGrupo = targetId;
+            document.getElementById("modalGrupo").style.display = 'block';
+            document.getElementById("overlaySecundario").classList.add("activo");
+            document.getElementById("nuevoNombreGrupo").focus();
+        }
+        
+        let selectDestinoProveedor = 'selectProveedor';
+        function abrirModalProveedor(targetId = 'selectProveedor') {
+            selectDestinoProveedor = targetId;
+            document.getElementById("modalProveedor").style.display = 'block';
+            document.getElementById("overlaySecundario").classList.add("activo");
+            document.getElementById("nuevoNitProveedor").focus();
+        }
+
+        function cerrarModalesSecundarios() {
+            document.getElementById("modalGrupo").style.display = 'none';
+            document.getElementById("modalProveedor").style.display = 'none';
+            document.getElementById("modalEditarGrupo").style.display = 'none';
+            document.getElementById("modalEliminarGrupoPin").style.display = 'none';
+            document.getElementById("modalVinculo").style.display = 'none';
+            document.getElementById("modalEditarProveedor").style.display = 'none';
+            document.getElementById("modalEliminarProveedorPin").style.display = 'none';
+            document.getElementById("overlaySecundario").classList.remove("activo");
+            
+            // Limpiar inputs
+            document.getElementById("nuevoNombreGrupo").value = '';
+            document.getElementById("nuevoNitProveedor").value = '';
+            document.getElementById("nuevoNombreProveedor").value = '';
+            document.getElementById("editGrupoNombre").value = '';
+            document.getElementById("inputPinEliminarGrupo").value = '';
+            document.getElementById("inputVinculoUrl").value = '';
+            document.getElementById("errorPinEliminarGrupo").style.display = 'none';
+            document.getElementById("inputPinEliminarProv").value = '';
+            document.getElementById("errorPinEliminarProv").style.display = 'none';
+        }
+
+        async function guardarGrupoAjax() {
+            const nombre = document.getElementById("nuevoNombreGrupo").value.trim();
+            if (!nombre) { alert("El nombre del grupo es obligatorio."); return; }
+            
+            try {
+                const response = await fetch('/agregar_grupo_ajax', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nombre: nombre })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    const select = document.getElementById(selectDestinoGrupo);
+                    const newOption = new Option(data.nombre, data.nombre, false, true);
+                    newOption.setAttribute('data-id', data.id);
+                    select.options.add(newOption);
+                    cerrarModalesSecundarios();
+                } else {
+                    alert("❌ Error: " + data.error);
+                }
+            } catch (e) {
+                alert("Error de conexión al guardar el grupo.");
+            }
+        }
+
+        async function guardarProveedorAjax() {
+            const nit = document.getElementById("nuevoNitProveedor").value.trim();
+            const nombre = document.getElementById("nuevoNombreProveedor").value.trim();
+            if (!nombre) { alert("El nombre del proveedor es obligatorio."); return; }
+
+            try {
+                const response = await fetch('/agregar_proveedor_ajax', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nit: nit, nombre: nombre })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    const select = document.getElementById(selectDestinoProveedor);
+                    const newOption = new Option(data.nombre, data.nombre, false, true);
+                    newOption.setAttribute('data-id', data.id);
+                    newOption.setAttribute('data-nit', nit);
+                    select.options.add(newOption);
+                    cerrarModalesSecundarios();
+                } else {
+                    alert("❌ Error: " + data.error);
+                }
+            } catch (e) {
+                alert("Error de conexión al guardar el proveedor.");
+            }
+        }
+
+        // --- LÓGICA DE CLIC DERECHO EN GRUPOS ---
+        let contextMenuGrupoData = null;
+
+        function initContextMenuGrupo(selectId) {
+            const select = document.getElementById(selectId);
+            if(!select) return;
+            
+            select.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                const selectedOption = select.options[select.selectedIndex];
+                if (!selectedOption || !selectedOption.value) return; 
+                
+                contextMenuGrupoData = {
+                    id: selectedOption.getAttribute('data-id'),
+                    nombre: selectedOption.value,
+                    selectId: selectId
+                };
+                
+                const menu = document.getElementById('contextMenuGrupo');
+                menu.style.display = 'block';
+                menu.style.left = e.pageX + 'px';
+                menu.style.top = e.pageY + 'px';
+            });
+        }
+        
+        initContextMenuGrupo('selectGrupo');
+        initContextMenuGrupo('edit_tipo_material');
+
+        document.addEventListener('click', function(e) {
+            const menu = document.getElementById('contextMenuGrupo');
+            if (menu && e.target !== menu) { menu.style.display = 'none'; }
+
+            const menuProv = document.getElementById('contextMenuProveedor');
+            if (menuProv && e.target !== menuProv) { menuProv.style.display = 'none'; }
+            
+            const menuVinculo = document.getElementById('contextMenuVinculo');
+            if (menuVinculo && e.target !== menuVinculo) { menuVinculo.style.display = 'none'; }
+        });
+
+        function abrirEditarGrupo() {
+            if (!contextMenuGrupoData) return;
+            document.getElementById("modalEditarGrupo").style.display = 'block';
+            document.getElementById("overlaySecundario").classList.add("activo");
+            
+            document.getElementById("editGrupoId").value = contextMenuGrupoData.id;
+            document.getElementById("editGrupoNombreViejo").value = contextMenuGrupoData.nombre;
+            document.getElementById("editGrupoNombre").value = contextMenuGrupoData.nombre;
+        }
+
+        async function guardarEdicionGrupoAjax() {
+            const id = document.getElementById("editGrupoId").value;
+            const nombreViejo = document.getElementById("editGrupoNombreViejo").value;
+            const nombre = document.getElementById("editGrupoNombre").value.trim();
+            if (!nombre) { alert("El nombre del grupo es obligatorio."); return; }
+
+            try {
+                const response = await fetch('/editar_grupo_ajax', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: id, nombre: nombre, nombre_viejo: nombreViejo })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    ['selectGrupo', 'edit_tipo_material'].forEach(selId => {
+                        const sel = document.getElementById(selId);
+                        if(sel) {
+                            for (let i = 0; i < sel.options.length; i++) {
+                                if (sel.options[i].getAttribute('data-id') == id) {
+                                    sel.options[i].value = nombre;
+                                    sel.options[i].text = nombre;
+                                }
+                            }
+                        }
+                    });
+                    cerrarModalesSecundarios();
+                } else { alert("❌ Error: " + data.error); }
+            } catch (e) { alert("Error de conexión al editar el grupo."); }
+        }
+
+        function confirmarEliminarGrupo() {
+            if (!contextMenuGrupoData) return;
+            document.getElementById('modalEliminarGrupoPin').style.display = 'block';
+            document.getElementById('overlaySecundario').classList.add('activo');
+            document.getElementById('inputPinEliminarGrupo').value = '';
+            document.getElementById('errorPinEliminarGrupo').style.display = 'none';
+            document.getElementById('inputPinEliminarGrupo').focus();
+        }
+
+        async function ejecutarEliminarGrupoAjax() {
+            const pin = document.getElementById('inputPinEliminarGrupo').value;
+            if (pin !== "1234") { document.getElementById('errorPinEliminarGrupo').style.display = 'block'; return; }
+            
+            try {
+                const response = await fetch('/eliminar_grupo_ajax', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: contextMenuGrupoData.id, pin: pin })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    ['selectGrupo', 'edit_tipo_material'].forEach(selId => {
+                        const sel = document.getElementById(selId);
+                        if(sel) {
+                            for (let i = sel.options.length - 1; i >= 0; i--) {
+                                if (sel.options[i].getAttribute('data-id') == contextMenuGrupoData.id) { sel.remove(i); }
+                            }
+                        }
+                    });
+                    cerrarModalesSecundarios();
+                } else { alert("❌ Error: " + data.error); }
+            } catch (e) { alert("Error de conexión al eliminar el grupo."); }
+        }
+
+        // --- LÓGICA DE CLIC DERECHO EN PROVEEDORES ---
+        let contextMenuProvData = null;
+
+        function initContextMenuProveedor(selectId) {
+            const select = document.getElementById(selectId);
+            if(!select) return;
+            
+            select.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                const selectedOption = select.options[select.selectedIndex];
+                if (!selectedOption || !selectedOption.value) return; 
+                
+                contextMenuProvData = {
+                    id: selectedOption.getAttribute('data-id'),
+                    nit: selectedOption.getAttribute('data-nit'),
+                    nombre: selectedOption.value,
+                    selectId: selectId
+                };
+                
+                const menu = document.getElementById('contextMenuProveedor');
+                menu.style.display = 'block';
+                menu.style.left = e.pageX + 'px';
+                menu.style.top = e.pageY + 'px';
+            });
+        }
+        
+        initContextMenuProveedor('selectProveedor');
+        initContextMenuProveedor('edit_empresa');
+
+        function abrirEditarProveedor() {
+            if (!contextMenuProvData) return;
+            document.getElementById("modalEditarProveedor").style.display = 'block';
+            document.getElementById("overlaySecundario").classList.add("activo");
+            
+            document.getElementById("editProvId").value = contextMenuProvData.id;
+            document.getElementById("editProvNombreViejo").value = contextMenuProvData.nombre;
+            document.getElementById("editProvNit").value = contextMenuProvData.nit || '';
+            document.getElementById("editProvNombre").value = contextMenuProvData.nombre;
+        }
+
+        async function guardarEdicionProveedorAjax() {
+            const id = document.getElementById("editProvId").value;
+            const nombreViejo = document.getElementById("editProvNombreViejo").value;
+            const nit = document.getElementById("editProvNit").value.trim();
+            const nombre = document.getElementById("editProvNombre").value.trim();
+            if (!nombre) { alert("El nombre del proveedor es obligatorio."); return; }
+
+            try {
+                const response = await fetch('/editar_proveedor_ajax', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: id, nit: nit, nombre: nombre, nombre_viejo: nombreViejo })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    ['selectProveedor', 'edit_empresa'].forEach(selId => {
+                        const sel = document.getElementById(selId);
+                        if(sel) {
+                            for (let i = 0; i < sel.options.length; i++) {
+                                if (sel.options[i].getAttribute('data-id') == id) {
+                                    sel.options[i].value = nombre;
+                                    sel.options[i].text = nombre;
+                                    sel.options[i].setAttribute('data-nit', nit);
+                                }
+                            }
+                        }
+                    });
+                    cerrarModalesSecundarios();
+                } else { alert("❌ Error: " + data.error); }
+            } catch (e) { alert("Error de conexión al editar el proveedor."); }
+        }
+
+        function confirmarEliminarProveedor() {
+            if (!contextMenuProvData) return;
+            document.getElementById('modalEliminarProveedorPin').style.display = 'block';
+            document.getElementById('overlaySecundario').classList.add('activo');
+            document.getElementById('inputPinEliminarProv').value = '';
+            document.getElementById('errorPinEliminarProv').style.display = 'none';
+            document.getElementById('inputPinEliminarProv').focus();
+        }
+
+        async function ejecutarEliminarProveedorAjax() {
+            const pin = document.getElementById('inputPinEliminarProv').value;
+            if (pin !== "1234") { document.getElementById('errorPinEliminarProv').style.display = 'block'; return; }
+            
+            try {
+                const response = await fetch('/eliminar_proveedor_ajax', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: contextMenuProvData.id, pin: pin })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    ['selectProveedor', 'edit_empresa'].forEach(selId => {
+                        const sel = document.getElementById(selId);
+                        if(sel) {
+                            for (let i = sel.options.length - 1; i >= 0; i--) {
+                                if (sel.options[i].getAttribute('data-id') == contextMenuProvData.id) { sel.remove(i); }
+                            }
+                        }
+                    });
+                    cerrarModalesSecundarios();
+                } else { alert("❌ Error: " + data.error); }
+            } catch (e) { alert("Error de conexión al eliminar el proveedor."); }
+        }
+
+        // --- LÓGICA DE CLIC DERECHO PARA VÍNCULOS ---
+        let contextMenuVinculoData = null;
+
+        function abrirMenuVinculo(event, cell) {
+            event.preventDefault();
+            const tr = cell.parentNode;
+            if (!tr.dataset.id) return;
+
+            contextMenuVinculoData = {
+                materialId: tr.dataset.id,
+                cell: cell
+            };
+
+            const menu = document.getElementById('contextMenuVinculo');
+            menu.style.display = 'block';
+            menu.style.left = event.pageX + 'px';
+            menu.style.top = event.pageY + 'px';
+        }
+
+        function abrirModalVinculo() {
+            if (!contextMenuVinculoData) return;
+            const tr = contextMenuVinculoData.cell.parentNode;
+            const currentLink = tr.dataset.driveLink || '';
+
+            document.getElementById('vinculoMaterialId').value = contextMenuVinculoData.materialId;
+            document.getElementById('inputVinculoUrl').value = currentLink;
+            
+            document.getElementById('modalVinculo').style.display = 'block';
+            document.getElementById('overlaySecundario').classList.add('activo');
+            document.getElementById('inputVinculoUrl').focus();
+        }
+
+        async function guardarVinculoAjax() {
+            const materialId = document.getElementById('vinculoMaterialId').value;
+            const newLink = document.getElementById('inputVinculoUrl').value.trim();
+
+            try {
+                const response = await fetch('/actualizar_vinculo_ajax', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ material_id: materialId, link: newLink })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    const cell = contextMenuVinculoData.cell;
+                    const tr = cell.parentNode;
+                    tr.dataset.driveLink = newLink;
+
+                    const codigo = tr.dataset.codigo || '';
+                    const nombre = tr.dataset.nombre || '';
+                    const texto = `<strong>${codigo ? codigo + ' - ' : ''}${nombre}</strong>`;
+
+                    if (newLink) {
+                        cell.innerHTML = `<a href="${newLink}" target="_blank" title="Abrir enlace de Drive" style="color: #2563eb; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${texto}</a>`;
+                    } else {
+                        cell.innerHTML = texto;
+                    }
+                    cerrarModalesSecundarios();
+                } else { alert("❌ Error: " + data.error); }
+            } catch (e) { alert("Error de conexión al guardar el vínculo."); }
         }
     </script>
 {% endblock %}
