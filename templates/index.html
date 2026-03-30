@@ -203,13 +203,13 @@
                 <label>Fecha de Factura / Documento:</label>
                 <input type="date" name="fecha_factura" id="fechaFacturaEntrada" required>
                 <label>Tipo de Documento:</label>
-                <input type="text" name="documento" required>
+                <input type="text" name="documento" id="tipoDocEntrada" required oninput="verificarDevolucion()">
                 <label>Número de Documento:</label>
                 <input type="text" name="numero_documento" required>
                 <label>Cantidad:</label>
                 <input type="number" name="cantidad" required>
-                <label>Costo de compra (Q):</label>
-                <input type="number" step="0.01" name="precio" required>
+                <label id="lblPrecioEntrada">Costo de compra (Q):</label>
+                <input type="number" step="0.01" name="precio" id="precioEntrada" required>
             </div>
             <div class="modal-acciones">
                 <button type="button" class="btn btn-secundario" onclick="cerrarModal('modalEntrada')">Cancelar</button>
@@ -348,6 +348,23 @@
                 cerrarModalPassword();
             } else {
                 document.getElementById('errorPassword').style.display = 'block';
+            }
+        }
+
+        function verificarDevolucion() {
+            const docInput = document.getElementById('tipoDocEntrada').value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            const precioInput = document.getElementById('precioEntrada');
+            const lblPrecio = document.getElementById('lblPrecioEntrada');
+            
+            if (docInput.includes('devolucion')) {
+                precioInput.value = '0';
+                precioInput.setAttribute('readonly', 'true');
+                precioInput.style.backgroundColor = '#f1f5f9';
+                lblPrecio.innerText = 'Costo (Automático por devolución):';
+            } else {
+                precioInput.removeAttribute('readonly');
+                precioInput.style.backgroundColor = '#ffffff';
+                lblPrecio.innerText = 'Costo de compra (Q):';
             }
         }
 

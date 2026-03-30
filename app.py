@@ -459,6 +459,29 @@ def agregar_entrada():
             fecha = datetime.now().strftime('%Y-%m-%d')
 
         conn = get_db_connection()
+        
+        # --- LÓGICA DE DEVOLUCIÓN ---
+        doc_lower = documento.strip().lower()
+        if 'devolucion' in doc_lower or 'devolución' in doc_lower:
+            # Buscar si existe una salida con ese número de documento para este material
+            salida = conn.execute('''
+                SELECT precio_unitario FROM movimientos
+                WHERE material_id = ? AND tipo = 'salida' AND numero_documento = ?
+                ORDER BY id DESC LIMIT 1
+            ''', (material_id, numero_documento)).fetchone()
+            
+            if salida:
+                precio = salida['precio_unitario']
+            else:
+                # Si no encuentra el doc exacto, intentar con la última salida del material
+                ultima_salida = conn.execute('''
+                    SELECT precio_unitario FROM movimientos
+                    WHERE material_id = ? AND tipo = 'salida'
+                    ORDER BY id DESC LIMIT 1
+                ''', (material_id,)).fetchone()
+                if ultima_salida:
+                    precio = ultima_salida['precio_unitario']
+
         conn.execute('''
             INSERT INTO movimientos (material_id, tipo, cantidad, precio_unitario, fecha, documento, numero_documento, fecha_factura)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -730,30 +753,36 @@ def exportar_kardex():
     border_thin = Border(left=Side(style='thin', color='E2E8F0'), right=Side(style='thin', color='E2E8F0'), top=Side(style='thin', color='E2E8F0'), bottom=Side(style='thin', color='E2E8F0'))
 
     # --- CONFIGURAR HOJA: KARDEX RESUMIDO ---
-    headers_resumen = ['Código', 'Producto', 'Grupo', 'Unidad', 'Exist. Inicial', 'Entradas', 'Salidas', 'Exist. Final', 'Costo Prom. (Q)', 'Total (Q)']
+    headers_resumen = ['Producto', 'Grupo', 'Entradas', 'Salidas', 'Existencia', 'Costo Prom. (Q)', 'Total (Q)']
     ws_resumen.append(headers_resumen)
     for col_num, cell in enumerate(ws_resumen[1], 1):
-        if col_num == 6: cell.fill, cell.font = fill_hdr_verde, font_hdr_verde
-        elif col_num == 7: cell.fill, cell.font = fill_hdr_naranja, font_hdr_naranja
-        elif col_num >= 8: cell.fill, cell.font = fill_hdr_azul, font_hdr_azul
+        if col_num == 3: cell.fill, cell.font = fill_hdr_verde, font_hdr_verde
+        elif col_num == 4: cell.fill, cell.font = fill_hdr_naranja, font_hdr_naranja
+        elif col_num >= 5: cell.fill, cell.font = fill_hdr_azul, font_hdr_azul
         else: cell.fill, cell.font = fill_hdr_gris, font_hdr_gris
-        cell.alignment = alignment_left if col_num <= 4 else alignment_right
+        cell.alignment = alignment_left if col_num <= 2 else alignment_right
         cell.border = border_thin
 
     # --- CONFIGURAR HOJA: KARDEX DETALLADO ---
-    headers_detallado = ['Producto', 'Grupo', 'Fecha', 'Semana del Mes', 'Detalle', 'Documento', 'No. Documento', 
+    headers_detallado = ['Producto', 'Grupo', 'Fecha', 'Detalle', 'Documento', 'No. Documento', 
                  'Entrada Cantidad', 'Entrada Costo (Q)', 'Entrada Total (Q)',
                  'Salida Cantidad', 'Salida Costo (Q)', 'Salida Total (Q)',
                  'Saldo Cantidad', 'Saldo Costo Prom (Q)', 'Saldo Total (Q)']
                  
     ws_detallado.append(headers_detallado)
     for col_num, cell in enumerate(ws_detallado[1], 1):
-        if 8 <= col_num <= 10: cell.fill, cell.font = fill_hdr_verde, font_hdr_verde
-        elif 11 <= col_num <= 13: cell.fill, cell.font = fill_hdr_naranja, font_hdr_naranja
-        elif 14 <= col_num <= 16: cell.fill, cell.font = fill_hdr_azul, font_hdr_azul
+        if 7 <= col_num <= 9: cell.fill, cell.font = fill_hdr_verde, font_hdr_verde
+        elif 10 <= col_num <= 12: cell.fill, cell.font = fill_hdr_naranja, font_hdr_naranja
+        elif 13 <= col_num <= 15: cell.fill, cell.font = fill_hdr_azul, font_hdr_azul
         else: cell.fill, cell.font = fill_hdr_gris, font_hdr_gris
-        cell.alignment = alignment_left if col_num <= 7 else alignment_right
+        cell.alignment = alignment_left if col_num <= 6 else alignment_right
         cell.border = border_thin
+
+    # Variables para totales del Kardex Resumido
+    total_entradas_res = 0
+    total_salidas_res = 0
+    total_existencia_res = 0
+    gran_total_res = 0
 
     for idx, mat in enumerate(materiales, 1):
         mat_id = mat['id']
@@ -785,42 +814,47 @@ def exportar_kardex():
         acum_ingresos = 0
         acum_salidas = 0
         
+        # Variables para totales del Kardex Detallado por producto
+        sum_entrada_cant = 0
+        sum_entrada_total = 0
+        sum_salida_cant = 0
+        sum_salida_total = 0
+        
         titulo_saldo = 'Saldo Inicial' if mes_filtro == 'todos' else f'Saldo Anterior ({mes_filtro})'
         row_det = [
-            mat['nombre'], mat['tipo_material'], '-', '-', titulo_saldo, '', '',
+            mat['nombre'], mat['tipo_material'], '-', titulo_saldo, '', '',
             '', '', '', '', '', '',
             cant_saldo, round(precio_promedio, 2), round(total_saldo, 2)
         ]
         ws_detallado.append(row_det)
         for col_num, cell in enumerate(ws_detallado[ws_detallado.max_row], 1):
-            if 14 <= col_num <= 16: cell.fill = fill_celda_azul
-            cell.alignment = alignment_left if col_num <= 7 else alignment_right
+            if 13 <= col_num <= 15: cell.fill = fill_celda_azul
+            cell.alignment = alignment_left if col_num <= 6 else alignment_right
             cell.border = border_thin
         
         for mov in movs_actuales:
             doc = mov['documento'] or ''
             num_doc = mov['numero_documento'] or ''
             
-            fecha_obj = datetime.strptime(mov['fecha'], '%Y-%m-%d')
-            semana = f"Semana {(fecha_obj.day - 1) // 7 + 1}"
-            
             if mov['tipo'] == 'entrada':
                 costo_mov = mov['cantidad'] * mov['precio_unitario']
                 cant_saldo += mov['cantidad']
                 total_saldo += costo_mov
                 acum_ingresos += mov['cantidad']
+                sum_entrada_cant += mov['cantidad']
+                sum_entrada_total += costo_mov
                 if cant_saldo > 0: precio_promedio = total_saldo / cant_saldo
                 row_det = [
-                    mat['nombre'], mat['tipo_material'], mov['fecha'], semana, 'Entrada / Compra', doc, num_doc,
+                    mat['nombre'], mat['tipo_material'], mov['fecha'], 'Entrada / Compra', doc, num_doc,
                     mov['cantidad'], round(mov['precio_unitario'], 2), round(costo_mov, 2),
                     '', '', '',
                     cant_saldo, round(precio_promedio, 2), round(total_saldo, 2)
                 ]
                 ws_detallado.append(row_det)
                 for col_num, cell in enumerate(ws_detallado[ws_detallado.max_row], 1):
-                    if 8 <= col_num <= 10: cell.fill = fill_celda_verde
-                    elif 14 <= col_num <= 16: cell.fill = fill_celda_azul
-                    cell.alignment = alignment_left if col_num <= 7 else alignment_right
+                    if 7 <= col_num <= 9: cell.fill = fill_celda_verde
+                    elif 13 <= col_num <= 15: cell.fill = fill_celda_azul
+                    cell.alignment = alignment_left if col_num <= 6 else alignment_right
                     cell.border = border_thin
 
             elif mov['tipo'] == 'salida':
@@ -828,37 +862,73 @@ def exportar_kardex():
                 cant_saldo -= mov['cantidad']
                 total_saldo -= costo_mov
                 acum_salidas += mov['cantidad']
+                sum_salida_cant += mov['cantidad']
+                sum_salida_total += costo_mov
                 row_det = [
-                    mat['nombre'], mat['tipo_material'], mov['fecha'], semana, 'Salida / Egreso', doc, num_doc,
+                    mat['nombre'], mat['tipo_material'], mov['fecha'], 'Salida / Egreso', doc, num_doc,
                     '', '', '',
                     mov['cantidad'], round(precio_promedio, 2), round(costo_mov, 2),
                     cant_saldo, round(precio_promedio, 2), round(total_saldo, 2)
                 ]
                 ws_detallado.append(row_det)
                 for col_num, cell in enumerate(ws_detallado[ws_detallado.max_row], 1):
-                    if 11 <= col_num <= 13: 
+                    if 10 <= col_num <= 12: 
                         cell.fill = fill_celda_naranja
-                        if col_num == 11: cell.font = font_naranja_bold
-                    elif 14 <= col_num <= 16: cell.fill = fill_celda_azul
-                    cell.alignment = alignment_left if col_num <= 7 else alignment_right
+                        if col_num == 10: cell.font = font_naranja_bold
+                    elif 13 <= col_num <= 15: cell.fill = fill_celda_azul
+                    cell.alignment = alignment_left if col_num <= 6 else alignment_right
                     cell.border = border_thin
+
+        # FILA DE TOTALES POR PRODUCTO (DETALLADO)
+        row_det_total = [
+            '', '', '', 'TOTALES PERIODO', '', '',
+            sum_entrada_cant, '', round(sum_entrada_total, 2),
+            sum_salida_cant, '', round(sum_salida_total, 2),
+            '', '', ''
+        ]
+        ws_detallado.append(row_det_total)
+        for col_num, cell in enumerate(ws_detallado[ws_detallado.max_row], 1):
+            cell.font = Font(bold=True)
+            if 7 <= col_num <= 9: cell.fill = fill_hdr_verde
+            elif 10 <= col_num <= 12: cell.fill = fill_hdr_naranja
+            cell.alignment = alignment_left if col_num <= 6 else alignment_right
+            cell.border = border_thin
 
         # FILA EN BLANCO PARA SEPARAR PRODUCTOS EN EL DETALLADO
         ws_detallado.append([])
 
         # AGREGAR FILA AL KARDEX RESUMIDO
         row_res = [
-            mat['codigo'], mat['nombre'], mat['tipo_material'], mat['unidad'],
-            ini_cant, acum_ingresos, acum_salidas,
+            mat['nombre'], mat['tipo_material'],
+            acum_ingresos, acum_salidas,
             cant_saldo, round(precio_promedio, 2), round(total_saldo, 2)
         ]
         ws_resumen.append(row_res)
         for col_num, cell in enumerate(ws_resumen[ws_resumen.max_row], 1):
-            if col_num == 6: cell.fill = fill_celda_verde
-            elif col_num == 7: cell.fill = fill_celda_naranja
-            elif col_num >= 8: cell.fill = fill_celda_azul
-            cell.alignment = alignment_left if col_num <= 4 else alignment_right
+            if col_num == 3: cell.fill = fill_celda_verde
+            elif col_num == 4: cell.fill = fill_celda_naranja
+            elif col_num >= 5: cell.fill = fill_celda_azul
+            cell.alignment = alignment_left if col_num <= 2 else alignment_right
             cell.border = border_thin
+            
+        # Sumar al Gran Total del Kardex Resumido
+        total_entradas_res += acum_ingresos
+        total_salidas_res += acum_salidas
+        total_existencia_res += cant_saldo
+        gran_total_res += total_saldo
+
+    # AGREGAR FILA DE TOTAL GENERAL AL KARDEX RESUMIDO AL FINAL DE TODO
+    row_res_tot = [
+        'TOTAL GENERAL', '',
+        total_entradas_res, total_salidas_res,
+        total_existencia_res, '', round(gran_total_res, 2)
+    ]
+    ws_resumen.append(row_res_tot)
+    for col_num, cell in enumerate(ws_resumen[ws_resumen.max_row], 1):
+        cell.font = Font(bold=True)
+        cell.fill = fill_hdr_gris
+        cell.alignment = alignment_left if col_num <= 2 else alignment_right
+        cell.border = border_thin
 
     # Ajustar ancho de las columnas automáticamente en AMBAS hojas
     for sheet in [ws_resumen, ws_detallado]:
