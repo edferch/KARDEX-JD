@@ -4,7 +4,7 @@ from datetime import datetime
 import calendar
 import csv
 from io import StringIO, BytesIO
-from openpyxl import Workbook
+import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 
 app = Flask(__name__)
@@ -20,7 +20,6 @@ def inicializar_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS materiales (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            codigo TEXT,
             nombre TEXT NOT NULL,
             tipo_material TEXT,
             numero_metrico TEXT,
@@ -82,12 +81,6 @@ def inicializar_db():
     except sqlite3.OperationalError:
         pass
 
-    # Agregar la columna codigo a la tabla materiales si no existe
-    try:
-        cursor.execute('ALTER TABLE materiales ADD COLUMN codigo TEXT')
-    except sqlite3.OperationalError:
-        pass
-        
     # Agregar la columna descripcion a la tabla materiales si no existe
     try:
         cursor.execute('ALTER TABLE materiales ADD COLUMN descripcion TEXT')
@@ -128,7 +121,7 @@ def index():
     if not mes_filtro:
         mes_filtro = datetime.now().strftime('%Y-%m')
         
-    materiales_db = conn.execute('SELECT * FROM materiales ORDER BY codigo ASC, nombre ASC').fetchall()
+    materiales_db = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
     materiales_kardex = []
     
     alertas_rojas = []
@@ -210,7 +203,6 @@ def index():
 
         materiales_kardex.append({
             'id': mat['id'],
-            'codigo': mat['codigo'],
             'nombre': mat['nombre'],
             'drive_link': mat['drive_link'],
             'tipo_material': mat['tipo_material'],
@@ -237,7 +229,6 @@ def index():
 @app.route('/inventario', methods=['GET', 'POST'])
 def inventario():
     if request.method == 'POST':
-        codigo = request.form.get('codigo', '')
         nombre = request.form['nombre']
         descripcion = request.form.get('descripcion', '')
         tipo_material = request.form['tipo_material']
@@ -253,9 +244,9 @@ def inventario():
 
         conn = get_db_connection()
         conn.execute('''
-            INSERT INTO materiales (codigo, nombre, descripcion, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente, drive_link)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (codigo, nombre, descripcion, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente, drive_link))
+            INSERT INTO materiales (nombre, descripcion, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente, drive_link)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (nombre, descripcion, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente, drive_link))
         conn.commit()
         conn.close()
 
@@ -263,7 +254,7 @@ def inventario():
         return redirect(url_for('inventario'))
 
     conn = get_db_connection()
-    materiales = conn.execute('SELECT * FROM materiales ORDER BY codigo ASC, nombre ASC').fetchall()
+    materiales = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
     grupos = conn.execute('SELECT * FROM grupos ORDER BY nombre ASC').fetchall()
     proveedores = conn.execute('SELECT * FROM proveedores ORDER BY nombre ASC').fetchall()
     fuentes = conn.execute('SELECT * FROM fuentes ORDER BY nombre ASC').fetchall()
@@ -274,7 +265,6 @@ def inventario():
 def editar_material():
     if request.method == 'POST':
         id_material = int(request.form['id'])
-        codigo = request.form.get('codigo', '')
         nombre = request.form['nombre']
         descripcion = request.form.get('descripcion', '')
         tipo_material = request.form['tipo_material']
@@ -291,9 +281,9 @@ def editar_material():
         conn = get_db_connection()
         conn.execute('''
             UPDATE materiales 
-            SET codigo = ?, nombre = ?, descripcion = ?, tipo_material = ?, numero_metrico = ?, origen = ?, empresa = ?, presentacion = ?, unidad = ?, cantidad_inicial = ?, precio_unitario = ?, fuente = ?, drive_link = ?
+            SET nombre = ?, descripcion = ?, tipo_material = ?, numero_metrico = ?, origen = ?, empresa = ?, presentacion = ?, unidad = ?, cantidad_inicial = ?, precio_unitario = ?, fuente = ?, drive_link = ?
             WHERE id = ?
-        ''', (codigo, nombre, descripcion, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente, drive_link, id_material))
+        ''', (nombre, descripcion, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente, drive_link, id_material))
         conn.commit()
         conn.close()
 
@@ -560,21 +550,21 @@ def eliminar_material(id):
 @app.route('/entradas')
 def entradas():
     conn = get_db_connection()
-    materiales = conn.execute('SELECT * FROM materiales ORDER BY codigo ASC, nombre ASC').fetchall()
+    materiales = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
     conn.close()
     return render_template('entradas.html', materiales=materiales)
 
 @app.route('/salidas')
 def salidas():
     conn = get_db_connection()
-    materiales = conn.execute('SELECT * FROM materiales ORDER BY codigo ASC, nombre ASC').fetchall()
+    materiales = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
     conn.close()
     return render_template('salidas.html', materiales=materiales)
 
 @app.route('/reporte')
 def reporte():
     conn = get_db_connection()
-    materiales = conn.execute('SELECT * FROM materiales ORDER BY codigo ASC, nombre ASC').fetchall()
+    materiales = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
     
     selected_material_id = request.args.get('material_id', type=int)
     mes_filtro = request.args.get('mes')
@@ -661,43 +651,39 @@ def reporte():
 @app.route('/exportar_inventario')
 def exportar_inventario():
     conn = get_db_connection()
-    materiales = conn.execute('SELECT * FROM materiales ORDER BY codigo ASC, nombre ASC').fetchall()
+    materiales = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
     conn.close()
     
-    wb = Workbook()
+    wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Inventario"
     
     # Estilos basados en la interfaz (CSS)
     fill_hdr_gris = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
     font_hdr_gris = Font(color="475569", bold=True)
-    alignment_left = Alignment(horizontal="left", vertical="center")
-    alignment_right = Alignment(horizontal="right", vertical="center")
+    alignment_left = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    alignment_right = Alignment(horizontal="right", vertical="center", wrap_text=True)
     border_thin = Border(left=Side(style='thin', color='E2E8F0'), 
                          right=Side(style='thin', color='E2E8F0'), 
                          top=Side(style='thin', color='E2E8F0'), 
                          bottom=Side(style='thin', color='E2E8F0'))
 
-    headers = ['Código', 'Nombre', 'Grupo', 'No. Metrico', 'Origen', 'Fuente', 'Proveedor', 'Presentacion', 'Unidad', 'Existencia Inicial', 'Costo Unitario (Q)']
+    headers = ['Nombre', 'Descripción', 'Grupo', 'No. Metrico', 'Origen', 'Fuente', 'Proveedor', 'Presentacion', 'Unidad', 'Existencia Inicial', 'Costo Unitario (Q)']
     
     ws.append(headers)
     for col_num, cell in enumerate(ws[1], 1):
         cell.fill = fill_hdr_gris
         cell.font = font_hdr_gris
+        # Alinear a la izquierda todas las columnas de texto
         cell.alignment = alignment_left if col_num <= 9 else alignment_right
         cell.border = border_thin
 
     for idx, mat in enumerate(materiales, 1):
-        row = [
-            mat['codigo'], mat['nombre'], mat['tipo_material'], mat['numero_metrico'],
-            mat['origen'], mat['fuente'], mat['empresa'], mat['presentacion'],
-            mat['unidad'], mat['cantidad_inicial'], round(mat['precio_unitario'], 2)
-        ]
+        row = [mat['nombre'], mat['descripcion'], mat['tipo_material'], mat['numero_metrico'], mat['origen'], mat['fuente'], mat['empresa'], mat['presentacion'], mat['unidad'], mat['cantidad_inicial'], round(mat['precio_unitario'], 2)]
         ws.append(row)
         for col_num, cell in enumerate(ws[ws.max_row], 1):
             cell.alignment = alignment_left if col_num <= 9 else alignment_right
             cell.border = border_thin
-
     # Ajustar ancho de las columnas automáticamente
     for col in ws.columns:
         max_length = 0
@@ -713,7 +699,7 @@ def exportar_inventario():
     output = BytesIO()
     wb.save(output)
     
-    return Response(output.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers={'Content-Disposition': 'attachment; filename=Inventario_General.xlsx'})
+    return Response(output.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers={'Content-Disposition': 'attachment; filename=Plantilla_Inventario.xlsx'})
 
 @app.route('/exportar_kardex')
 def exportar_kardex():
@@ -722,9 +708,9 @@ def exportar_kardex():
         mes_filtro = datetime.now().strftime('%Y-%m')
         
     conn = get_db_connection()
-    materiales = conn.execute('SELECT * FROM materiales ORDER BY codigo ASC, nombre ASC').fetchall()
+    materiales = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
     
-    wb = Workbook()
+    wb = openpyxl.Workbook()
     
     # Hoja 1: Resumen
     ws_resumen = wb.active
@@ -950,6 +936,88 @@ def exportar_kardex():
     nombre_archivo = f'Kardex_General_{mes_filtro}.xlsx' if mes_filtro != 'todos' else 'Kardex_General_Completo.xlsx'
     return Response(output.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers={'Content-Disposition': f'attachment; filename={nombre_archivo}'})
 
+@app.route('/cargar_excel', methods=['GET', 'POST'])
+def cargar_excel():
+    if request.method == 'POST':
+        if 'archivo_excel' not in request.files:
+            flash('Error: No se encontró el archivo en la solicitud.', 'error')
+            return redirect(request.url)
+        
+        file = request.files['archivo_excel']
+        
+        if file.filename == '':
+            flash('Error: No se seleccionó ningún archivo.', 'error')
+            return redirect(request.url)
+
+        if file and file.filename.endswith('.xlsx'):
+            try:
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                workbook = openpyxl.load_workbook(file)
+                sheet = workbook.active
+                
+                rows_processed = 0
+                rows_imported = 0
+                rows_skipped = 0
+                
+                sql_insert = '''
+                    INSERT INTO materiales (nombre, descripcion, tipo_material, numero_metrico, origen, fuente, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, drive_link)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                '''
+                
+                for i, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+                    rows_processed += 1
+                    try:
+                        if len(row) < 11:
+                            rows_skipped += 1
+                            continue
+
+                        (nombre_raw, descripcion, tipo_material_raw, numero_metrico, origen, 
+                         fuente_raw, empresa_raw, presentacion, unidad, cantidad_inicial_raw, precio_unitario_raw) = row[:11]
+
+                        # --- VALIDACIÓN DE DATOS OBLIGATORIOS ---
+                        if not all([nombre_raw, tipo_material_raw, fuente_raw, empresa_raw, cantidad_inicial_raw is not None, precio_unitario_raw is not None]):
+                            rows_skipped += 1
+                            continue
+
+                        # --- LIMPIEZA Y CREACIÓN AUTOMÁTICA DE ENTIDADES ---
+                        nombre = str(nombre_raw).strip()
+                        tipo_material = str(tipo_material_raw).strip()
+                        fuente = str(fuente_raw).strip()
+                        empresa = str(empresa_raw).strip()
+
+                        # Si el grupo, fuente o proveedor no existen, se crean.
+                        cursor.execute('INSERT OR IGNORE INTO grupos (nombre) VALUES (?)', (tipo_material,))
+                        cursor.execute('INSERT OR IGNORE INTO fuentes (nombre) VALUES (?)', (fuente,))
+                        prov_exists = cursor.execute('SELECT id FROM proveedores WHERE nombre = ?', (empresa,)).fetchone()
+                        if not prov_exists:
+                            cursor.execute('INSERT INTO proveedores (nombre, nit) VALUES (?, ?)', (empresa, ''))
+
+                        cantidad_inicial = int(cantidad_inicial_raw)
+                        precio_unitario = float(precio_unitario_raw)
+
+                        values_to_insert = (nombre, descripcion, tipo_material, numero_metrico, origen, fuente, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, '')
+                        cursor.execute(sql_insert, values_to_insert)
+                        rows_imported += 1
+
+                    except (ValueError, TypeError):
+                        rows_skipped += 1
+                        continue
+                
+                conn.commit()
+                conn.close()
+                
+                flash_message = f"Éxito: Carga completada. Se importaron {rows_imported} materiales."
+                if rows_skipped > 0:
+                    flash_message += f" Se omitieron {rows_skipped} filas por datos faltantes o formato incorrecto."
+                flash(flash_message, "success")
+
+            except Exception as e:
+                flash(f"Error: Ocurrió un problema al procesar el archivo Excel: {e}", "error")
+            return redirect(url_for('inventario'))
+
+    return render_template('carga_masiva.html')
+
 @app.route('/admin', methods=['GET', 'POST'])
 def admin():
     # --- SISTEMA DE LOGIN PARA LA PANTALLA DE ADMIN ---
@@ -1030,7 +1098,7 @@ def eliminar_fuente(id):
 @app.route('/consultor')
 def consultor():
     conn = get_db_connection()
-    materiales_db = conn.execute('SELECT * FROM materiales ORDER BY codigo ASC, nombre ASC').fetchall()
+    materiales_db = conn.execute('SELECT * FROM materiales ORDER BY nombre ASC').fetchall()
     stock_materiales = []
 
     for mat in materiales_db:
