@@ -4,8 +4,6 @@
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <h2>Inventario</h2>
         <div style="display: flex; gap: 10px;">
-            <a href="/exportar_inventario" class="btn" style="background-color: #059669;">📥 Descargar Plantilla</a>
-            <a href="{{ url_for('cargar_excel') }}" class="btn" style="background-color: #10b981;">📤 Carga Masiva</a>
             <button id="btnEditar" onclick="abrirPanelEditar()" class="btn" style="display: none; background-color: #f59e0b; box-shadow: 0 4px 6px -1px rgba(245, 158, 11, 0.3);">✏️ Editar</button>
             <button id="btnEliminar" onclick="confirmarEliminacionMaterial()" class="btn btn-salida" style="display: none; box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.3);">🗑️ Eliminar</button>
             <button onclick="abrirPanel()" class="btn">+ Agregar Material</button>
@@ -33,6 +31,13 @@
         }, 3000);
     </script>
 
+    <div style="margin: 20px 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+        <div style="display: flex; gap: 10px; align-items: center; min-width: 300px; flex: 1;">
+            <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Buscar por nombre de material..." style="flex: 1; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; max-width: 400px;">
+            <button onclick="document.getElementById('searchInput').focus()" class="btn btn-secundario" style="padding: 8px 14px;" title="Atajo: Ctrl + F">🔍 Buscar</button>
+        </div>
+    </div>
+
     <div class="kardex-tabla-contenedor">
         <table class="kardex-tabla">
             <thead>
@@ -51,7 +56,7 @@
                     <th class="hdr-gris">Costo Inicial</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="tabla-materiales">
                 {% for mat in materiales %}
                 <tr onclick="seleccionarMaterial(this)" style="cursor: pointer; transition: background-color 0.2s;"
                     data-id="{{ mat['id'] }}"
@@ -67,7 +72,7 @@
                     data-unidad="{{ mat['unidad'] or '' }}"
                     data-cant="{{ mat['cantidad_inicial'] }}"
                     data-precio="{{ mat['precio_unitario'] }}">
-                    <td class="col-texto">{{ mat['id'] }}</td>
+                    <td class="col-texto">{{ loop.index }}</td>
                     <td class="col-texto" oncontextmenu="abrirMenuVinculo(event, this)">
                         {% if mat['drive_link'] %}
                             <a href="{{ mat['drive_link'] }}" target="_blank" title="Abrir enlace de Drive" style="color: #2563eb; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
@@ -93,6 +98,11 @@
                     <td colspan="12" style="padding: 20px; text-align: center; color: #7f8c8d;">No hay materiales registrados en el inventario.</td>
                 </tr>
                 {% endfor %}
+                <tr id="no-results" style="display: none;">
+                    <td colspan="12" style="padding: 20px; text-align: center; color: #7f8c8d; background-color: #f8fafc;">
+                        No se encontraron resultados para su búsqueda.
+                    </td>
+                </tr>
             </tbody>
         </table>
     </div>
@@ -788,5 +798,39 @@
                 } else { alert("❌ Error: " + data.error); }
             } catch (e) { alert("Error de conexión al guardar el vínculo."); }
         }
+
+        function filterTable() {
+            const input = document.getElementById('searchInput');
+            const filter = input.value.toLowerCase();
+            const tbody = document.getElementById('tabla-materiales');
+            const rows = tbody.getElementsByTagName('tr');
+            let visibleRows = 0;
+
+            for (let i = 0; i < rows.length; i++) {
+                if (rows[i].id === 'no-results') continue;
+
+                const nameCell = rows[i].getElementsByTagName("td")[1];
+                if (nameCell) {
+                    const txtValue = nameCell.textContent || nameCell.innerText;
+                    if (txtValue.toLowerCase().indexOf(filter) > -1) {
+                        rows[i].style.display = "";
+                        visibleRows++;
+                    } else {
+                        rows[i].style.display = "none";
+                    }
+                }
+            }
+            document.getElementById('no-results').style.display = visibleRows > 0 ? 'none' : '';
+        }
+
+        document.addEventListener('keydown', function(event) {
+            if (event.ctrlKey && event.key === 'f') {
+                const searchInput = document.getElementById('searchInput');
+                if(searchInput) {
+                    event.preventDefault();
+                    searchInput.focus();
+                }
+            }
+        });
     </script>
 {% endblock %}

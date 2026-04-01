@@ -48,6 +48,15 @@
     </div>
 
     <div class="dashboard-grid" style="margin-top: 20px;">
+        <!-- MÓDULO DE IMPORTACIÓN / EXPORTACIÓN -->
+        <div class="card" style="grid-column: 1 / -1;">
+            <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #8b5cf6; padding-bottom: 10px;">📦 Gestión de Inventario</h3>
+            <div style="display: flex; gap: 15px;">
+                <a href="/exportar_inventario" class="btn" style="background-color: #059669; flex: 1; text-align: center;">📥 Descargar Plantilla</a>
+                <a href="{{ url_for('cargar_excel') }}" class="btn" style="background-color: #10b981; flex: 1; text-align: center;">📤 Carga Masiva</a>
+            </div>
+        </div>
+
         <!-- MÓDULO DE GRUPOS -->
         <div class="card">
             <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #3b82f6; padding-bottom: 10px;">🏷️ Grupos de Material</h3>
