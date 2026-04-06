@@ -237,7 +237,7 @@ def inventario():
         empresa = request.form['empresa']
         presentacion = request.form['presentacion']
         unidad = request.form['unidad']
-        cantidad_inicial = int(request.form['cantidad_inicial'])
+        cantidad_inicial = float(request.form['cantidad_inicial'])
         precio_unitario = float(request.form['precio_unitario'])
         fuente = request.form.get('fuente', '')
         drive_link = request.form.get('drive_link', '')
@@ -273,7 +273,7 @@ def editar_material():
         empresa = request.form['empresa']
         presentacion = request.form['presentacion']
         unidad = request.form['unidad']
-        cantidad_inicial = int(request.form['cantidad_inicial'])
+        cantidad_inicial = float(request.form['cantidad_inicial'])
         precio_unitario = float(request.form['precio_unitario'])
         fuente = request.form.get('fuente', '')
         drive_link = request.form.get('drive_link', '')
@@ -438,7 +438,7 @@ def eliminar_proveedor_ajax():
 def agregar_entrada():
     if request.method == 'POST':
         material_id = int(request.form['material_id'])
-        cantidad = int(request.form['cantidad'])
+        cantidad = float(request.form['cantidad'])
         precio = float(request.form['precio'])
         fecha = request.form.get('fecha')
         fecha_factura = request.form.get('fecha_factura', '')
@@ -488,7 +488,7 @@ def agregar_entrada():
 def agregar_salida():
     if request.method == 'POST':
         material_id = int(request.form['material_id'])
-        cantidad_a_sacar = int(request.form['cantidad'])
+        cantidad_a_sacar = float(request.form['cantidad'])
         fecha = request.form.get('fecha')
         documento = request.form.get('documento', '')
         numero_documento = request.form.get('numero_documento', '')
@@ -993,7 +993,7 @@ def cargar_excel():
                         if not prov_exists:
                             cursor.execute('INSERT INTO proveedores (nombre, nit) VALUES (?, ?)', (empresa, ''))
 
-                        cantidad_inicial = int(cantidad_inicial_raw)
+                        cantidad_inicial = float(cantidad_inicial_raw)
                         precio_unitario = float(precio_unitario_raw)
 
                         values_to_insert = (nombre, descripcion, tipo_material, numero_metrico, origen, fuente, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, '')

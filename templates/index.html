@@ -207,7 +207,7 @@
                 <label>Número de Documento:</label>
                 <input type="text" name="numero_documento" required>
                 <label>Cantidad:</label>
-                <input type="number" name="cantidad" required>
+                <input type="number" step="any" name="cantidad" required>
                 <label id="lblPrecioEntrada">Costo de compra (Q):</label>
                 <input type="number" step="0.01" name="precio" id="precioEntrada" required>
             </div>
@@ -239,7 +239,7 @@
                 <label>Número de Documento:</label>
                 <input type="text" name="numero_documento" required>
                 <label>Cantidad a extraer (Unidades):</label>
-                <input type="number" name="cantidad" required>
+                <input type="number" step="any" name="cantidad" required>
             </div>
             <div class="modal-acciones">
                 <button type="button" class="btn btn-secundario" onclick="cerrarModal('modalSalida')">Cancelar</button>
