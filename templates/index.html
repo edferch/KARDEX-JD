@@ -144,29 +144,29 @@
                     </td>
                     <td class="col-texto">{{ mat['tipo_material'] }}</td>
                     
-                    <td class="celda-amarilla">{{ mat['ini_cant'] }}</td>
-                    <td class="celda-amarilla">Q {{ "%.2f"|format(mat['ini_costo']) }}</td>
-                    <td class="celda-amarilla">Q {{ "%.2f"|format(mat['ini_total']) }}</td>
+                    <td class="celda-amarilla">{{ "{:,}".format(mat['ini_cant']) }}</td>
+                    <td class="celda-amarilla">Q {{ "{:,.2f}".format(mat['ini_costo']) }}</td>
+                    <td class="celda-amarilla">Q {{ "{:,.2f}".format(mat['ini_total']) }}</td>
                     
-                    <td class="celda-verde">{{ mat['ing_cant'] }}</td>
-                    <td class="celda-verde">Q {{ "%.2f"|format(mat['ing_costo']) }}</td> 
-                    <td class="celda-verde">Q {{ "%.2f"|format(mat['ing_total']) }}</td>
+                    <td class="celda-verde">{{ "{:,}".format(mat['ing_cant']) }}</td>
+                    <td class="celda-verde">Q {{ "{:,.2f}".format(mat['ing_costo']) }}</td> 
+                    <td class="celda-verde">Q {{ "{:,.2f}".format(mat['ing_total']) }}</td>
                     
-                    <td class="celda-azul">{{ mat['sal_cant'] }}</td>
-                    <td class="celda-azul">Q {{ "%.2f"|format(mat['sal_costo']) }}</td>
-                    <td class="celda-azul">Q {{ "%.2f"|format(mat['sal_total']) }}</td>
+                    <td class="celda-azul">{{ "{:,}".format(mat['sal_cant']) }}</td>
+                    <td class="celda-azul">Q {{ "{:,.2f}".format(mat['sal_costo']) }}</td>
+                    <td class="celda-azul">Q {{ "{:,.2f}".format(mat['sal_total']) }}</td>
                     
                     {% set stock = mat['fin_cant'] %}
                     {% if stock >= 5 %}
-                        <td class="celda-naranja alerta-verde">{{ stock }}</td>
+                        <td class="celda-naranja alerta-verde">{{ "{:,}".format(stock) }}</td>
                     {% elif stock >= 2 %}
-                        <td class="celda-naranja alerta-amarilla">{{ stock }}</td>
+                        <td class="celda-naranja alerta-amarilla">{{ "{:,}".format(stock) }}</td>
                     {% else %}
-                        <td class="celda-naranja alerta-roja">{{ stock }}</td>
+                        <td class="celda-naranja alerta-roja">{{ "{:,}".format(stock) }}</td>
                     {% endif %}
                     
-                    <td class="celda-naranja">Q {{ "%.2f"|format(mat['fin_costo']) }}</td>
-                    <td class="celda-naranja">Q {{ "%.2f"|format(mat['fin_total']) }}</td>
+                    <td class="celda-naranja">Q {{ "{:,.2f}".format(mat['fin_costo']) }}</td>
+                    <td class="celda-naranja">Q {{ "{:,.2f}".format(mat['fin_total']) }}</td>
                 </tr>
                 {% else %}
                 <tr>
@@ -179,6 +179,31 @@
                     </td>
                 </tr>
             </tbody>
+        <tfoot class="hdr-gris">
+            <tr style="background-color: #e2e8f0; color: #475569;">
+                <td colspan="3" style="text-align: right; padding: 14px 16px; font-weight: 800;">TOTALES GENERALES:</td>
+                
+                <!-- Totales de Saldo Inicial -->
+                <td style="text-align: right; padding: 14px 16px; font-weight: bold;">{{ "{:,}".format(totales.ini_cant) }}</td>
+                <td></td> <!-- Espacio en blanco para la columna de costo promedio unitario -->
+                <td style="text-align: right; padding: 14px 16px; font-weight: bold;">Q {{ "{:,.2f}".format(totales.ini_total) }}</td>
+                
+                <!-- Totales de Entradas -->
+                <td style="text-align: right; padding: 14px 16px; font-weight: bold;">{{ "{:,}".format(totales.ing_cant) }}</td>
+                <td></td> <!-- Espacio de costo -->
+                <td style="text-align: right; padding: 14px 16px; font-weight: bold;">Q {{ "{:,.2f}".format(totales.ing_total) }}</td>
+                
+                <!-- Totales de Salidas -->
+                <td style="text-align: right; padding: 14px 16px; font-weight: bold;">{{ "{:,}".format(totales.sal_cant) }}</td>
+                <td></td> <!-- Espacio de costo -->
+                <td style="text-align: right; padding: 14px 16px; font-weight: bold;">Q {{ "{:,.2f}".format(totales.sal_total) }}</td>
+                
+                <!-- Totales de Saldo Final -->
+                <td style="text-align: right; padding: 14px 16px; font-weight: bold;">{{ "{:,}".format(totales.fin_cant) }}</td>
+                <td></td> <!-- Espacio de costo -->
+                <td style="text-align: right; padding: 14px 16px; font-weight: bold;">Q {{ "{:,.2f}".format(totales.fin_total) }}</td>
+            </tr>
+        </tfoot>
         </table>
     </div>
 
@@ -238,6 +263,10 @@
                 <input type="text" name="documento" required>
                 <label>Número de Documento:</label>
                 <input type="text" name="numero_documento" required>
+                <label>Departamento:</label>
+                <input type="text" name="departamento" autocomplete="off">
+                <label>Solicitante:</label>
+                <input type="text" name="solicitante" autocomplete="off">
                 <label>Cantidad a extraer (Unidades):</label>
                 <input type="number" step="any" name="cantidad" required>
             </div>
@@ -373,5 +402,40 @@
         document.getElementById('fechaEntrada').value = today;
         document.getElementById('fechaFacturaEntrada').value = today;
         document.getElementById('fechaSalida').value = today;
+
+        // --- LÓGICA DE BÚSQUEDA Y SELECCIÓN DE MATERIALES ---
+        function inicializarBusquedaMaterial(inputId, hiddenId) {
+            const input = document.getElementById(inputId);
+            const hidden = document.getElementById(hiddenId);
+            const datalist = document.getElementById('listaMateriales');
+            
+            if(!input || !hidden || !datalist) return;
+
+            // Inicializamos como inválido hasta que se seleccione algo válido
+            input.setCustomValidity("Debe seleccionar un material de la lista.");
+
+            input.addEventListener('input', function() {
+                let foundId = "";
+                const options = datalist.options;
+                
+                for(let i=0; i<options.length; i++) {
+                    if(options[i].value === input.value) {
+                        foundId = options[i].getAttribute('data-id');
+                        break;
+                    }
+                }
+                
+                hidden.value = foundId;
+                
+                if (foundId === "") {
+                    input.setCustomValidity("Debe seleccionar un material válido de la lista.");
+                } else {
+                    input.setCustomValidity(""); // Es válido
+                }
+            });
+        }
+        
+        inicializarBusquedaMaterial('busquedaMaterialEntrada', 'hiddenMaterial_entrada');
+        inicializarBusquedaMaterial('busquedaMaterialSalida', 'hiddenMaterial_salida');
     </script>
 {% endblock %}

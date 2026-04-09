@@ -58,6 +58,17 @@ def inicializar_db():
     except sqlite3.OperationalError:
         pass
 
+    # Agregar columnas de departamento y solicitante a movimientos si no existen
+    try:
+        cursor.execute('ALTER TABLE movimientos ADD COLUMN departamento TEXT')
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute('ALTER TABLE movimientos ADD COLUMN solicitante TEXT')
+    except sqlite3.OperationalError:
+        pass
+
     # Tabla de Proveedores
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS proveedores (
@@ -127,6 +138,14 @@ def index():
     alertas_rojas = []
     alertas_amarillas = []
     
+    # Diccionario para almacenar los totales generales de la pantalla principal
+    totales = {
+        'ini_cant': 0, 'ini_total': 0,
+        'ing_cant': 0, 'ing_total': 0,
+        'sal_cant': 0, 'sal_total': 0,
+        'fin_cant': 0, 'fin_total': 0
+    }
+
     # Detectar si estamos a fin de mes (últimos 3 días) para sugerir descarga
     hoy = datetime.now()
     try:
@@ -221,10 +240,20 @@ def index():
             'fin_total': total_saldo
         })
         
+        # Sumar a los totales generales
+        totales['ini_cant'] += ini_cant
+        totales['ini_total'] += ini_total
+        totales['ing_cant'] += acum_ingreso_cant
+        totales['ing_total'] += acum_ingreso_total
+        totales['sal_cant'] += acum_salida_cant
+        totales['sal_total'] += acum_salida_total
+        totales['fin_cant'] += cant_saldo
+        totales['fin_total'] += total_saldo
+
     grupos = conn.execute('SELECT * FROM grupos ORDER BY nombre ASC').fetchall()
     conn.close()
     
-    return render_template('index.html', materiales=materiales_kardex, grupos=grupos, mes_filtro=mes_filtro, alertas_rojas=alertas_rojas, alertas_amarillas=alertas_amarillas, es_fin_de_mes=es_fin_de_mes)
+    return render_template('index.html', materiales=materiales_kardex, grupos=grupos, mes_filtro=mes_filtro, alertas_rojas=alertas_rojas, alertas_amarillas=alertas_amarillas, es_fin_de_mes=es_fin_de_mes, totales=totales)
 
 @app.route('/inventario', methods=['GET', 'POST'])
 def inventario():
@@ -492,6 +521,8 @@ def agregar_salida():
         fecha = request.form.get('fecha')
         documento = request.form.get('documento', '')
         numero_documento = request.form.get('numero_documento', '')
+        departamento = request.form.get('departamento', '')
+        solicitante = request.form.get('solicitante', '')
 
         if not fecha:
             fecha = datetime.now().strftime('%Y-%m-%d')
@@ -525,9 +556,9 @@ def agregar_salida():
 
         # Si hay stock, registrar la salida
         conn.execute('''
-            INSERT INTO movimientos (material_id, tipo, cantidad, precio_unitario, fecha, documento, numero_documento)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (material_id, 'salida', cantidad_a_sacar, precio_promedio, fecha, documento, numero_documento))
+            INSERT INTO movimientos (material_id, tipo, cantidad, precio_unitario, fecha, documento, numero_documento, departamento, solicitante)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (material_id, 'salida', cantidad_a_sacar, precio_promedio, fecha, documento, numero_documento, departamento, solicitante))
         conn.commit()
         conn.close()
         
