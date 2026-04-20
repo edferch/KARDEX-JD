@@ -68,12 +68,13 @@
                     data-fuente="{{ mat['fuente'] or '' }}"
                     data-empresa="{{ mat['empresa'] or '' }}"
                     data-drive-link="{{ mat['drive_link'] or '' }}"
+                    data-costo-link="{{ mat['costo_link'] or '' }}"
                     data-presentacion="{{ mat['presentacion'] or '' }}"
                     data-unidad="{{ mat['unidad'] or '' }}"
                     data-cant="{{ mat['cantidad_inicial'] }}"
                     data-precio="{{ mat['precio_unitario'] }}">
                     <td class="col-texto">{{ loop.index }}</td>
-                    <td class="col-texto" oncontextmenu="abrirMenuVinculo(event, this)">
+                    <td class="col-texto">
                         {% if mat['drive_link'] %}
                             <a href="{{ mat['drive_link'] }}" target="_blank" title="Abrir enlace de Drive" style="color: #2563eb; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
                                 <strong>{{ mat['nombre'] }}</strong>
@@ -91,7 +92,15 @@
                     <td class="col-texto">{{ mat['presentacion'] }}</td>
                     <td class="col-texto">{{ mat['unidad'] }}</td>
                     <td>{{ mat['cantidad_inicial'] }}</td>
-                    <td>Q {{ "%.2f"|format(mat['precio_unitario']) }}</td>
+                    <td>
+                        {% if mat['costo_link'] %}
+                            <a href="{{ mat['costo_link'] }}" target="_blank" title="Abrir enlace de Costo" style="color: #2563eb; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                                Q {{ "%.2f"|format(mat['precio_unitario']) }}
+                            </a>
+                        {% else %}
+                            Q {{ "%.2f"|format(mat['precio_unitario']) }}
+                        {% endif %}
+                    </td>
                 </tr>
                 {% else %}
                 <tr>
@@ -232,20 +241,6 @@
         </div>
     </div>
 
-    <!-- Modal para Vínculo -->
-    <div class="modal" id="modalVinculo" style="z-index: 1100;">
-        <h3 style="color: #3b82f6; margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">Agregar/Editar Vínculo</h3>
-        <div class="form-grupo">
-            <input type="hidden" id="vinculoMaterialId">
-            <label>URL del Vínculo (Ej: Google Drive):</label>
-            <input type="url" id="inputVinculoUrl" placeholder="https://..." autocomplete="off">
-        </div>
-        <div class="modal-acciones">
-            <button type="button" class="btn btn-secundario" onclick="cerrarModalesSecundarios()">Cancelar</button>
-            <button type="button" class="btn" onclick="guardarVinculoAjax()">Guardar Vínculo</button>
-        </div>
-    </div>
-
     <!-- Modal para Editar Grupo -->
     <div class="modal" id="modalEditarGrupo" style="z-index: 1100;">
         <h3 style="color: #f59e0b; margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">Editar Grupo</h3>
@@ -332,11 +327,6 @@
     <div id="contextMenuProveedor" style="display: none; position: absolute; background: white; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); z-index: 2000; padding: 5px 0; min-width: 180px;">
         <div onclick="abrirEditarProveedor()" onmouseover="this.style.backgroundColor='#f1f5f9'" onmouseout="this.style.backgroundColor='transparent'" style="padding: 10px 15px; cursor: pointer; color: #334155; font-size: 14px; transition: background 0.2s;">✏️ Editar Proveedor</div>
         <div onclick="confirmarEliminarProveedor()" onmouseover="this.style.backgroundColor='#fef2f2'" onmouseout="this.style.backgroundColor='transparent'" style="padding: 10px 15px; cursor: pointer; color: #e74c3c; font-size: 14px; transition: background 0.2s;">🗑️ Eliminar Proveedor</div>
-    </div>
-
-    <!-- Menú Contextual para Vínculo -->
-    <div id="contextMenuVinculo" style="display: none; position: absolute; background: white; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); z-index: 2000; padding: 5px 0; min-width: 220px;">
-        <div onclick="abrirModalVinculo()" onmouseover="this.style.backgroundColor='#f1f5f9'" onmouseout="this.style.backgroundColor='transparent'" style="padding: 10px 15px; cursor: pointer; color: #334155; font-size: 14px; transition: background 0.2s;">🔗 Agregar/Editar Vínculo</div>
     </div>
 
     <script>
@@ -443,7 +433,6 @@
             document.getElementById("modalProveedor").style.display = 'none';
             document.getElementById("modalEditarGrupo").style.display = 'none';
             document.getElementById("modalEliminarGrupoPin").style.display = 'none';
-            document.getElementById("modalVinculo").style.display = 'none';
             document.getElementById("modalEditarProveedor").style.display = 'none';
             document.getElementById("modalEliminarProveedorPin").style.display = 'none';
             document.getElementById("overlaySecundario").classList.remove("activo");
@@ -454,7 +443,6 @@
             document.getElementById("nuevoNombreProveedor").value = '';
             document.getElementById("editGrupoNombre").value = '';
             document.getElementById("inputPinEliminarGrupo").value = '';
-            document.getElementById("inputVinculoUrl").value = '';
             document.getElementById("errorPinEliminarGrupo").style.display = 'none';
             document.getElementById("inputPinEliminarProv").value = '';
             document.getElementById("errorPinEliminarProv").style.display = 'none';
@@ -548,9 +536,6 @@
 
             const menuProv = document.getElementById('contextMenuProveedor');
             if (menuProv && e.target !== menuProv) { menuProv.style.display = 'none'; }
-            
-            const menuVinculo = document.getElementById('contextMenuVinculo');
-            if (menuVinculo && e.target !== menuVinculo) { menuVinculo.style.display = 'none'; }
         });
 
         function abrirEditarGrupo() {
@@ -735,68 +720,6 @@
                     cerrarModalesSecundarios();
                 } else { alert("❌ Error: " + data.error); }
             } catch (e) { alert("Error de conexión al eliminar el proveedor."); }
-        }
-
-        // --- LÓGICA DE CLIC DERECHO PARA VÍNCULOS ---
-        let contextMenuVinculoData = null;
-
-        function abrirMenuVinculo(event, cell) {
-            event.preventDefault();
-            const tr = cell.parentNode;
-            if (!tr.dataset.id) return;
-
-            contextMenuVinculoData = {
-                materialId: tr.dataset.id,
-                cell: cell
-            };
-
-            const menu = document.getElementById('contextMenuVinculo');
-            menu.style.display = 'block';
-            menu.style.left = event.pageX + 'px';
-            menu.style.top = event.pageY + 'px';
-        }
-
-        function abrirModalVinculo() {
-            if (!contextMenuVinculoData) return;
-            const tr = contextMenuVinculoData.cell.parentNode;
-            const currentLink = tr.dataset.driveLink || '';
-
-            document.getElementById('vinculoMaterialId').value = contextMenuVinculoData.materialId;
-            document.getElementById('inputVinculoUrl').value = currentLink;
-            
-            document.getElementById('modalVinculo').style.display = 'block';
-            document.getElementById('overlaySecundario').classList.add('activo');
-            document.getElementById('inputVinculoUrl').focus();
-        }
-
-        async function guardarVinculoAjax() {
-            const materialId = document.getElementById('vinculoMaterialId').value;
-            const newLink = document.getElementById('inputVinculoUrl').value.trim();
-
-            try {
-                const response = await fetch('/actualizar_vinculo_ajax', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ material_id: materialId, link: newLink })
-                });
-                const data = await response.json();
-
-                if (data.success) {
-                    const cell = contextMenuVinculoData.cell;
-                    const tr = cell.parentNode;
-                    tr.dataset.driveLink = newLink;
-
-                    const nombre = tr.dataset.nombre || '';
-                    const texto = `<strong>${nombre}</strong>`;
-
-                    if (newLink) {
-                        cell.innerHTML = `<a href="${newLink}" target="_blank" title="Abrir enlace de Drive" style="color: #2563eb; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${texto}</a>`;
-                    } else {
-                        cell.innerHTML = texto;
-                    }
-                    cerrarModalesSecundarios();
-                } else { alert("❌ Error: " + data.error); }
-            } catch (e) { alert("Error de conexión al guardar el vínculo."); }
         }
 
         function filterTable() {

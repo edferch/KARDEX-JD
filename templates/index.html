@@ -131,9 +131,9 @@
             </thead>
             <tbody id="tabla-materiales">
                 {% for mat in materiales %}
-                <tr>
+                <tr data-id="{{ mat['id'] }}" data-nombre="{{ mat['nombre'] }}" data-drive-link="{{ mat['drive_link'] or '' }}" data-costo-link="{{ mat['costo_link'] or '' }}">
                     <td class="col-texto">{{ loop.index }}</td>
-                    <td class="col-texto">
+                    <td class="col-texto" oncontextmenu="abrirMenuVinculo(event, this, 'nombre')">
                         {% if mat.drive_link %}
                             <a href="{{ mat.drive_link }}" target="_blank" title="Abrir enlace de Drive" style="color: #2563eb; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
                                 <strong>{{ mat['nombre'] }}</strong>
@@ -145,7 +145,15 @@
                     <td class="col-texto">{{ mat['tipo_material'] }}</td>
                     
                     <td class="celda-amarilla">{{ "{:,}".format(mat['ini_cant']) }}</td>
-                    <td class="celda-amarilla">Q {{ "{:,.2f}".format(mat['ini_costo']) }}</td>
+                    <td class="celda-amarilla" oncontextmenu="abrirMenuVinculo(event, this, 'costo')">
+                        {% if mat.costo_link %}
+                            <a href="{{ mat.costo_link }}" target="_blank" title="Abrir enlace de Costo" style="color: #2563eb; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                                Q {{ "{:,.2f}".format(mat['ini_costo']) }}
+                            </a>
+                        {% else %}
+                            Q {{ "{:,.2f}".format(mat['ini_costo']) }}
+                        {% endif %}
+                    </td>
                     <td class="celda-amarilla">Q {{ "{:,.2f}".format(mat['ini_total']) }}</td>
                     
                     <td class="celda-verde">{{ "{:,}".format(mat['ing_cant']) }}</td>
@@ -293,6 +301,27 @@
         </div>
     </div>
 
+    <!-- Menú Contextual para Vínculos -->
+    <div id="contextMenuVinculo" style="display: none; position: absolute; background: white; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); z-index: 2000; padding: 5px 0; min-width: 220px;">
+        <div onclick="abrirModalVinculo()" onmouseover="this.style.backgroundColor='#f1f5f9'" onmouseout="this.style.backgroundColor='transparent'" style="padding: 10px 15px; cursor: pointer; color: #334155; font-size: 14px; transition: background 0.2s;">🔗 Agregar/Editar Vínculo</div>
+    </div>
+
+    <div class="overlay" id="overlayVinculo" onclick="cerrarModalVinculo()" style="z-index: 1050;"></div>
+    
+    <div class="modal" id="modalVinculo" style="z-index: 1100; width: 350px;">
+        <h3 style="color: #3b82f6; margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">Agregar/Editar Vínculo</h3>
+        <div class="form-grupo">
+            <input type="hidden" id="vinculoMaterialId">
+            <input type="hidden" id="vinculoTipo">
+            <label>URL del Vínculo (Ej: Google Drive):</label>
+            <input type="url" id="inputVinculoUrl" placeholder="https://..." autocomplete="off">
+        </div>
+        <div class="modal-acciones">
+            <button type="button" class="btn btn-secundario" onclick="cerrarModalVinculo()">Cancelar</button>
+            <button type="button" class="btn" onclick="guardarVinculoAjax()">Guardar Vínculo</button>
+        </div>
+    </div>
+
     <script>
         function filterTable() {
             const input = document.getElementById('searchInput');
@@ -395,6 +424,70 @@
                 precioInput.style.backgroundColor = '#ffffff';
                 lblPrecio.innerText = 'Costo de compra (Q):';
             }
+        }
+
+        // --- LÓGICA DE VÍNCULOS ---
+        let contextMenuVinculoData = null;
+
+        function abrirMenuVinculo(event, cell, tipo) {
+            event.preventDefault();
+            const tr = cell.parentNode;
+            if (!tr.dataset.id) return;
+
+            contextMenuVinculoData = {
+                materialId: tr.dataset.id,
+                tipo: tipo,
+                cell: cell
+            };
+
+            const menu = document.getElementById('contextMenuVinculo');
+            menu.style.display = 'block';
+            menu.style.left = event.pageX + 'px';
+            menu.style.top = event.pageY + 'px';
+        }
+
+        document.addEventListener('click', function(e) {
+            const menuVinculo = document.getElementById('contextMenuVinculo');
+            if (menuVinculo && e.target !== menuVinculo) { menuVinculo.style.display = 'none'; }
+        });
+
+        function abrirModalVinculo() {
+            if (!contextMenuVinculoData) return;
+            const tr = contextMenuVinculoData.cell.parentNode;
+            const currentLink = contextMenuVinculoData.tipo === 'nombre' ? (tr.dataset.driveLink || '') : (tr.dataset.costoLink || '');
+
+            document.getElementById('vinculoMaterialId').value = contextMenuVinculoData.materialId;
+            document.getElementById('vinculoTipo').value = contextMenuVinculoData.tipo;
+            document.getElementById('inputVinculoUrl').value = currentLink;
+            
+            document.getElementById('modalVinculo').style.display = 'block';
+            document.getElementById('overlayVinculo').classList.add('activo');
+            document.getElementById('inputVinculoUrl').focus();
+        }
+
+        function cerrarModalVinculo() {
+            document.getElementById('modalVinculo').style.display = 'none';
+            document.getElementById('overlayVinculo').classList.remove('activo');
+            document.getElementById('inputVinculoUrl').value = '';
+        }
+
+        async function guardarVinculoAjax() {
+            const materialId = document.getElementById('vinculoMaterialId').value;
+            const tipo = document.getElementById('vinculoTipo').value;
+            const newLink = document.getElementById('inputVinculoUrl').value.trim();
+
+            try {
+                const response = await fetch('/actualizar_vinculo_ajax', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ material_id: materialId, link: newLink, tipo: tipo })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    location.reload(); // Recargamos para reflejar los vínculos y que los datos cambien
+                } else { alert("❌ Error: " + data.error); }
+            } catch (e) { alert("Error de conexión al guardar el vínculo."); }
         }
 
         // Poner la fecha actual por defecto en los modales

@@ -104,6 +104,12 @@ def inicializar_db():
     except sqlite3.OperationalError:
         pass
 
+    # Agregar la columna de hipervínculo de costo a la tabla materiales si no existe
+    try:
+        cursor.execute('ALTER TABLE materiales ADD COLUMN costo_link TEXT')
+    except sqlite3.OperationalError:
+        pass
+
     # Tabla de Grupos (Categorías/Fuentes)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS grupos (
@@ -224,6 +230,7 @@ def index():
             'id': mat['id'],
             'nombre': mat['nombre'],
             'drive_link': mat['drive_link'],
+            'costo_link': dict(mat).get('costo_link', ''),
             'tipo_material': mat['tipo_material'],
             'unidad': mat['unidad'],
             'ini_cant': ini_cant,
@@ -387,13 +394,16 @@ def actualizar_vinculo_ajax():
     data = request.json
     material_id = data.get('material_id')
     link = data.get('link', '')
+    tipo = data.get('tipo', 'nombre') # 'nombre' o 'costo'
 
     if not material_id:
         return jsonify({'success': False, 'error': 'ID de material no proporcionado'})
 
+    columna = 'drive_link' if tipo == 'nombre' else 'costo_link'
+
     conn = get_db_connection()
     try:
-        conn.execute('UPDATE materiales SET drive_link = ? WHERE id = ?', (link, material_id))
+        conn.execute(f'UPDATE materiales SET {columna} = ? WHERE id = ?', (link, material_id))
         conn.commit()
         conn.close()
         return jsonify({'success': True})
