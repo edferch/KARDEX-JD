@@ -48,6 +48,46 @@
     </div>
 
     <div class="dashboard-grid" style="margin-top: 20px;">
+        <!-- MÓDULO DE ACTUALIZACIÓN GENÉRICA -->
+        <div class="card" style="grid-column: 1 / -1;">
+            <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #ef4444; padding-bottom: 10px;">🛠️ Actualizar Registro Específico</h3>
+            <form method="POST" action="/admin" autocomplete="off" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end;">
+                <input type="hidden" name="accion" value="actualizar_registro">
+                
+                <div class="form-grupo" style="margin-bottom: 0;">
+                    <label>Tabla:</label>
+                    <select name="tabla" required>
+                        <option value="">Seleccione una tabla...</option>
+                        <option value="materiales">Materiales</option>
+                        <option value="movimientos">Movimientos</option>
+                        <option value="proveedores">Proveedores</option>
+                        <option value="fuentes">Fuentes</option>
+                        <option value="grupos">Grupos</option>
+                    </select>
+                </div>
+                
+                <div class="form-grupo" style="margin-bottom: 0;">
+                    <label>ID del Registro:</label>
+                    <input type="number" name="id_registro" required>
+                </div>
+                
+                <div class="form-grupo" style="margin-bottom: 0;">
+                    <label>Nombre de la Columna:</label>
+                    <input type="text" name="columna" required placeholder="Ej: precio_unitario">
+                </div>
+                
+                <div class="form-grupo" style="margin-bottom: 0;">
+                    <label>Nuevo Valor:</label>
+                    <input type="text" name="nuevo_valor" required>
+                </div>
+                
+                <button type="submit" class="btn btn-salida" style="height: 42px; margin-top: auto;">Actualizar</button>
+            </form>
+            <div style="margin-top: 15px; font-size: 13px; color: #64748b; background-color: #f8fafc; padding: 10px; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                <strong>⚠️ Advertencia:</strong> Esta es una herramienta avanzada. Asegúrese de escribir el nombre exacto de la columna en la base de datos (por ejemplo: <code>precio_unitario</code>, <code>cantidad</code>, <code>fecha</code>, <code>numero_documento</code>, etc.).
+            </div>
+        </div>
+
         <!-- MÓDULO DE IMPORTACIÓN / EXPORTACIÓN -->
         <div class="card" style="grid-column: 1 / -1;">
             <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #8b5cf6; padding-bottom: 10px;">📦 Gestión de Inventario</h3>

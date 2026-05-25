@@ -1100,6 +1100,28 @@ def admin():
             except sqlite3.IntegrityError:
                 flash("Error: La fuente ya existe.", "error")
                 
+        elif accion == 'actualizar_registro':
+            tabla = request.form.get('tabla')
+            id_registro = request.form.get('id_registro')
+            columna = request.form.get('columna')
+            nuevo_valor = request.form.get('nuevo_valor')
+            
+            # Validación simple para evitar errores y proteger los nombres de tabla permitidos
+            tablas_permitidas = ['materiales', 'movimientos', 'proveedores', 'fuentes', 'grupos']
+            if tabla in tablas_permitidas:
+                try:
+                    # En SQLite los nombres de tabla y columna deben ir formateados directamente (f-strings)
+                    conn.execute(f'''
+                        UPDATE {tabla}
+                        SET {columna} = ?
+                        WHERE id = ?
+                    ''', (nuevo_valor, id_registro))
+                    flash(f"Éxito: Registro con ID {id_registro} de la tabla '{tabla}' actualizado correctamente (Columna: {columna}).", "success")
+                except Exception as e:
+                    flash(f"Error al actualizar: {e}", "error")
+            else:
+                flash("Error: Tabla no permitida.", "error")
+                
         conn.commit()
         return redirect(url_for('admin'))
         
