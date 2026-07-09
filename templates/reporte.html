@@ -7,14 +7,18 @@
         <form method="GET" action="/reporte" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;" autocomplete="off">
             <div class="form-grupo" style="flex: 1; min-width: 250px; margin-bottom: 0;">
                 <label>Producto / Material:</label>
-                <select name="material_id" required>
-                    <option value="">-- Seleccione un producto --</option>
+                <div style="position: relative; width: 100%;">
+                    <input type="text" id="busquedaMaterialReporte" list="listaMateriales" placeholder="Escriba para buscar nombre o descripción..." autocomplete="off" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px;" required
+                    {% for mat in materiales %}{% if selected_material_id == mat['id'] %} value="{{ mat['nombre'] }} | {{ mat['tipo_material'] }} | {{ dict(mat).get('descripcion', '') }}" {% endif %}{% endfor %}>
+                    
+                    <input type="hidden" name="material_id" id="hiddenMaterial_reporte" value="{{ selected_material_id or '' }}" required>
+                </div>
+
+                <datalist id="listaMateriales">
                     {% for mat in materiales %}
-                        <option value="{{ mat['id'] }}" {% if selected_material_id == mat['id'] %}selected{% endif %}>
-                            {{ mat['nombre'] }} - ({{ mat['tipo_material'] }})
-                        </option>
+                    <option data-id="{{ mat['id'] }}" value="{{ mat['nombre'] }} | {{ mat['tipo_material'] }} | {{ dict(mat).get('descripcion', '') }}"></option>
                     {% endfor %}
-                </select>
+                </datalist>
             </div>
             
             <div class="form-grupo" style="margin-bottom: 0;">
@@ -123,4 +127,45 @@
             </div>
         {% endif %}
     {% endif %}
+
+
+    <script>
+        function inicializarBusquedaMaterial(inputId, hiddenId) {
+            const input = document.getElementById(inputId);
+            const hidden = document.getElementById(hiddenId);
+            const datalist = document.getElementById('listaMateriales');
+            
+            if(!input || !hidden || !datalist) return;
+
+            // Si el campo está vacío, exige que seleccione uno
+            if (hidden.value === "") {
+                input.setCustomValidity("Debe seleccionar un material de la lista.");
+            }
+
+            input.addEventListener('input', function() {
+                let foundId = "";
+                const options = datalist.options;
+                
+                for(let i=0; i < options.length; i++) {
+                    if(options[i].value === input.value) {
+                        foundId = options[i].getAttribute('data-id');
+                        break;
+                    }
+                }
+                
+                hidden.value = foundId;
+                
+                if (foundId === "") {
+                    input.setCustomValidity("Debe seleccionar un material válido de la lista sugerida.");
+                } else {
+                    input.setCustomValidity(""); // Es válido
+                }
+            });
+        }
+        
+        // Ejecutar la función cuando la página cargue
+        document.addEventListener('DOMContentLoaded', function() {
+            inicializarBusquedaMaterial('busquedaMaterialReporte', 'hiddenMaterial_reporte');
+        });
+    </script>
 {% endblock %}

@@ -236,11 +236,8 @@
             <input type="hidden" name="origen" value="index">
             <div class="form-grupo">
                 <label>Seleccionar Material:</label>
-                <select name="material_id" required>
-                    {% for mat in materiales %}
-                    <option value="{{ mat['id'] }}">{{ mat['nombre'] }} ({{ mat['tipo_material'] }})</option>
-                    {% endfor %}
-                </select>
+                <input type="text" id="busquedaMaterialEntrada" list="listaMateriales" placeholder="Escriba para buscar..." autocomplete="off" style="width: 100%; padding: 12px 16px; border: 1px solid #cbd5e1; border-radius: 8px;" required>
+                <input type="hidden" name="material_id" id="hiddenMaterial_entrada" required>
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <label style="margin: 0;">Fecha de Registro (Automática):</label>
                     <span onclick="desbloquearFecha('fechaEntrada')" style="font-size: 11px; color: #3b82f6; cursor: pointer; font-weight: 600; padding: 4px 8px; background-color: #eff6ff; border-radius: 6px; border: 1px solid #bfdbfe; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='#dbeafe'" onmouseout="this.style.backgroundColor='#eff6ff'" title="Desbloquear (Solo Admin)">Cambiar fecha</span>
@@ -249,9 +246,12 @@
                 <label>Fecha de Factura / Documento:</label>
                 <input type="date" name="fecha_factura" id="fechaFacturaEntrada" required>
                 <label>Tipo de Documento:</label>
-                <input type="text" name="documento" id="tipoDocEntrada" required oninput="verificarDevolucion()">
-                <label>Número de Documento:</label>
-                <input type="text" name="numero_documento" required>
+                <select name="tipo_documento" id="tipoDocEntrada" onchange="actualizarLabelsEntrada()" required>
+                    <option value="factura">Factura</option>
+                    <option value="devolucion">Devolución</option>
+                </select>
+                <label id="lblNumeroDocumento">Número de Documento:</label>
+                <input type="text" name="numero_documento" id="inputNumeroDocumento" required>
                 <label>Cantidad:</label>
                 <input type="number" step="any" name="cantidad" required>
                 <label id="lblPrecioEntrada">Costo de compra (Q):</label>
@@ -270,19 +270,16 @@
             <input type="hidden" name="origen" value="index">
             <div class="form-grupo">
                 <label>Seleccionar Material:</label>
-                <select name="material_id" required>
-                    {% for mat in materiales %}
-                    <option value="{{ mat['id'] }}">{{ mat['nombre'] }} ({{ mat['tipo_material'] }})</option>
-                    {% endfor %}
-                </select>
+                <input type="text" id="busquedaMaterialSalida" list="listaMateriales" placeholder="Escriba para buscar..." autocomplete="off" style="width: 100%; padding: 12px 16px; border: 1px solid #cbd5e1; border-radius: 8px;" required>
+                <input type="hidden" name="material_id" id="hiddenMaterial_salida" required>
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <label style="margin: 0;">Fecha de Registro (Automática):</label>
                     <span onclick="desbloquearFecha('fechaSalida')" style="font-size: 11px; color: #3b82f6; cursor: pointer; font-weight: 600; padding: 4px 8px; background-color: #eff6ff; border-radius: 6px; border: 1px solid #bfdbfe; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='#dbeafe'" onmouseout="this.style.backgroundColor='#eff6ff'" title="Desbloquear (Solo Admin)">Cambiar fecha</span>
                 </div>
                 <input type="date" name="fecha" id="fechaSalida" required readonly style="background-color: #f1f5f9; cursor: not-allowed; color: #64748b; font-weight: 600;">
-                <label>Tipo de Documento:</label>
-                <input type="text" name="documento" required>
-                <label>Número de Documento:</label>
+                <label>Orden:</label>
+                <input type="text" name="documento" value="Orden" readonly style="background-color: #f1f5f9; cursor: not-allowed;">
+                <label>Correlativo:</label>
                 <input type="text" name="numero_documento" required>
                 <label>Departamento:</label>
                 <input type="text" name="departamento" autocomplete="off">
@@ -334,6 +331,12 @@
             <button type="button" class="btn" onclick="guardarVinculoAjax()">Guardar Vínculo</button>
         </div>
     </div>
+
+    <datalist id="listaMateriales">
+        {% for mat in materiales %}
+        <option data-id="{{ mat['id'] }}" value="{{ mat['nombre'] }} | {{ mat['tipo_material'] }} | {{ mat['descripcion'] or '' }}"></option>
+        {% endfor %}
+    </datalist>
 
     <div id="popoverDescripcion" style="display: none; position: absolute; background-color: #1e293b; color: white; padding: 10px 15px; border-radius: 8px; font-size: 13px; max-width: 250px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); z-index: 9999; white-space: pre-wrap; word-wrap: break-word; line-height: 1.5;">
     </div>
@@ -602,5 +605,19 @@
                 popover.dataset.targetId = '';
             }
         });
+
+        function actualizarLabelsEntrada() {
+            const tipo = document.getElementById('tipoDocEntrada').value;
+            const lbl = document.getElementById('lblNumeroDocumento');
+            const input = document.getElementById('inputNumeroDocumento');
+            
+            if (tipo === 'devolucion') {
+                lbl.innerText = 'Número de Orden (de donde salió):';
+                input.placeholder = 'Ej: ORD-001';
+            } else {
+                lbl.innerText = 'Número de Documento (Factura):';
+                input.placeholder = 'Ej: FAC-123';
+            }
+        }
     </script>
 {% endblock %}

@@ -52,8 +52,8 @@
                     <th class="hdr-gris col-texto">Proveedor</th>
                     <th class="hdr-gris col-texto">Presentación</th>
                     <th class="hdr-gris col-texto">Unidad</th>
-                    <th class="hdr-gris">Exist. Inicial</th>
-                    <th class="hdr-gris">Costo Inicial</th>
+                    <th class="hdr-gris">Exist. Actual</th>
+                    <th class="hdr-gris">Costo Prom. Actual</th>
                 </tr>
             </thead>
             <tbody id="tabla-materiales">
@@ -91,16 +91,8 @@
                     <td class="col-texto">{{ mat['empresa'] }}</td>
                     <td class="col-texto">{{ mat['presentacion'] }}</td>
                     <td class="col-texto">{{ mat['unidad'] }}</td>
-                    <td>{{ mat['cantidad_inicial'] }}</td>
-                    <td>
-                        {% if mat['costo_link'] %}
-                            <a href="{{ mat['costo_link'] }}" target="_blank" title="Abrir enlace de Costo" style="color: #2563eb; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
-                                Q {{ "%.2f"|format(mat['precio_unitario']) }}
-                            </a>
-                        {% else %}
-                            Q {{ "%.2f"|format(mat['precio_unitario']) }}
-                        {% endif %}
-                    </td>
+                    <td>{{ mat['stock_actual'] }}</td>
+                    <td>Q {{ "%.2f"|format(mat['costo_promedio_actual']) }}</td>
                 </tr>
                 {% else %}
                 <tr>

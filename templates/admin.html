@@ -213,7 +213,19 @@
                 </tbody>
             </table>
         </div>
+
+        <div class="card">
+            <h3>Gestionar IPs Autorizadas</h3>
+            <form method="POST">
+                <input type="hidden" name="accion" value="agregar_ip">
+                <input type="text" name="nueva_ip" placeholder="Ej: 192.168.1.75" required>
+                <input type="text" name="desc_ip" placeholder="Descripción (ej: PC Contador)" required>
+                <button type="submit">Autorizar IP</button>
+            </form>
+            </div>
     </div>
+
+
 
     <div style="text-align: center; margin-top: 30px;">
         <a href="/" class="btn" style="background-color: #7f8c8d;">Volver al Inicio</a>
