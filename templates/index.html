@@ -134,13 +134,26 @@
                 <tr data-id="{{ mat['id'] }}" data-nombre="{{ mat['nombre'] }}" data-drive-link="{{ mat['drive_link'] or '' }}" data-costo-link="{{ mat['costo_link'] or '' }}">
                     <td class="col-texto">{{ loop.index }}</td>
                     <td class="col-texto" oncontextmenu="abrirMenuVinculo(event, this, 'nombre')">
-                        {% if mat.drive_link %}
-                            <a href="{{ mat.drive_link }}" target="_blank" title="Abrir enlace de Drive" style="color: #2563eb; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
-                                <strong>{{ mat['nombre'] }}</strong>
-                            </a>
-                        {% else %}
-                            <strong>{{ mat['nombre'] }}</strong>
-                        {% endif %}
+                                <div style="display: flex; align-items: center; justify-content: space-between;">
+                                    <div>
+                                        {% if mat.drive_link %}
+                                            <a href="{{ mat.drive_link }}" target="_blank" title="Abrir enlace de Drive" style="color: #2563eb; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                                                <strong>{{ mat['nombre'] }}</strong>
+                                            </a>
+                                        {% else %}
+                                            <strong>{{ mat['nombre'] }}</strong>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    {% if mat['descripcion'] %}
+                                    <button type="button" onclick="toggleDescripcion(event, this)" style="background: none; border: none; cursor: pointer; margin-left: 8px; font-size: 16px; padding: 0; outline: none; transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'">
+                                        ℹ️
+                                    </button>
+                                    {% endif %}
+                                    <span class="texto-oculto" style="display: none;">{{ mat['descripcion'] }}</span>
+                                </div>
+                            </td>
+                        </div>
                     </td>
                     <td class="col-texto">{{ mat['tipo_material'] }}</td>
                     
@@ -322,10 +335,14 @@
         </div>
     </div>
 
+    <div id="popoverDescripcion" style="display: none; position: absolute; background-color: #1e293b; color: white; padding: 10px 15px; border-radius: 8px; font-size: 13px; max-width: 250px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); z-index: 9999; white-space: pre-wrap; word-wrap: break-word; line-height: 1.5;">
+    </div>
+
     <script>
         function filterTable() {
             const input = document.getElementById('searchInput');
-            const filter = input.value.toLowerCase();
+            // Normalizamos: quitamos tildes y pasamos a minúsculas
+            const filter = input.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
             const tbody = document.getElementById('tabla-materiales');
             const rows = tbody.getElementsByTagName('tr');
             let visibleRows = 0;
@@ -333,10 +350,13 @@
             for (let i = 0; i < rows.length; i++) {
                 if (rows[i].id === 'no-results') continue; // Omitir la fila de "no resultados"
 
-                const nameCell = rows[i].getElementsByTagName("td")[1];
+                const nameCell = rows[i].getElementsByTagName("td")[1]; // Columna 1 es el Nombre+Descripción
                 if (nameCell) {
+                    // textContent extrae todo el texto, incluyendo el del span oculto
                     const txtValue = nameCell.textContent || nameCell.innerText;
-                    if (txtValue.toLowerCase().indexOf(filter) > -1) {
+                    const normalizedText = txtValue.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                    
+                    if (normalizedText.includes(filter)) {
                         rows[i].style.display = "";
                         visibleRows++;
                     } else {
@@ -530,5 +550,57 @@
         
         inicializarBusquedaMaterial('busquedaMaterialEntrada', 'hiddenMaterial_entrada');
         inicializarBusquedaMaterial('busquedaMaterialSalida', 'hiddenMaterial_salida');
+
+        function toggleDescripcion(event, boton) {
+            // Evita que el clic se propague y cierre el popover inmediatamente
+            event.stopPropagation();
+            
+            const popover = document.getElementById('popoverDescripcion');
+            
+            // Si el globo ya está abierto en este mismo botón, lo cerramos
+            if (popover.style.display === 'block' && popover.dataset.targetId === boton.dataset.id) {
+                popover.style.display = 'none';
+                popover.dataset.targetId = '';
+                return;
+            }
+
+            // Obtener la descripción del span oculto
+            const spanOculto = boton.nextElementSibling;
+            popover.textContent = spanOculto.textContent || spanOculto.innerText;
+            
+            // Asignar un ID único al botón si no lo tiene, para saber quién abrió el globo
+            if (!boton.dataset.id) {
+                boton.dataset.id = Math.random().toString(36).substr(2, 9);
+            }
+            popover.dataset.targetId = boton.dataset.id;
+
+            // Mostrar el popover temporalmente para poder medirlo
+            popover.style.display = 'block';
+            
+            // Calcular la posición exacta debajo del botón
+            const rect = boton.getBoundingClientRect();
+            let leftPos = rect.left + window.scrollX - (popover.offsetWidth / 2) + (rect.width / 2);
+            
+            // Evitar que el globo se salga de los bordes de la pantalla
+            if (leftPos + popover.offsetWidth > window.innerWidth) {
+                leftPos = window.innerWidth - popover.offsetWidth - 15;
+            }
+            if (leftPos < 15) {
+                leftPos = 15;
+            }
+            
+            popover.style.left = leftPos + 'px';
+            popover.style.top = (rect.bottom + window.scrollY + 8) + 'px';
+        }
+
+        // Escuchar clics en todo el documento para cerrar el globo rápidamente
+        document.addEventListener('click', function(event) {
+            const popover = document.getElementById('popoverDescripcion');
+            // Si el popover está visible y hacemos clic fuera de él, se cierra
+            if (popover && popover.style.display === 'block' && event.target !== popover) {
+                popover.style.display = 'none';
+                popover.dataset.targetId = '';
+            }
+        });
     </script>
 {% endblock %}

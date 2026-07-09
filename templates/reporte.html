@@ -34,6 +34,32 @@
         <h3 style="color: #1e293b; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; margin-top: 0; font-size: 20px;">
             📦 {{ reporte_datos.material['nombre'] }} <span style="font-size: 14px; color: #64748b; font-weight: normal;">| Grupo: {{ reporte_datos.material['tipo_material'] }} | Unidad: {{ reporte_datos.material['unidad'] }}</span>
         </h3>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px;">
+            {% set total_entradas = reporte_datos.filas | selectattr('ing_cant', '!=', '') | map(attribute='ing_cant') | sum %}
+            {% set total_salidas = reporte_datos.filas | selectattr('sal_cant', '!=', '') | map(attribute='sal_cant') | sum %}
+            {% set saldo_final = reporte_datos.filas[-1]['saldo_cant'] %}
+            
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <p style="margin:0; font-size:12px; color:#64748b; font-weight:800; letter-spacing: 0.5px;">SALDO ANTERIOR</p>
+                <h3 style="margin:8px 0 0 0; color:#1e293b; font-size: 24px;">{{ reporte_datos.filas[0]['saldo_cant'] }}</h3>
+            </div>
+            
+            <div style="background-color: #ecfdf5; border: 1px solid #d1fae5; border-left: 4px solid #10b981; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <p style="margin:0; font-size:12px; color:#065f46; font-weight:800; letter-spacing: 0.5px;">TOTAL ENTRADAS</p>
+                <h3 style="margin:8px 0 0 0; color:#059669; font-size: 24px;">+ {{ total_entradas }}</h3>
+            </div>
+            
+            <div style="background-color: #eff6ff; border: 1px solid #dbeafe; border-left: 4px solid #3b82f6; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <p style="margin:0; font-size:12px; color:#1e3a8a; font-weight:800; letter-spacing: 0.5px;">TOTAL SALIDAS</p>
+                <h3 style="margin:8px 0 0 0; color:#2563eb; font-size: 24px;">- {{ total_salidas }}</h3>
+            </div>
+            
+            <div style="background-color: #fff7ed; border: 1px solid #ffedd5; border-left: 4px solid #ea580c; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <p style="margin:0; font-size:12px; color:#9a3412; font-weight:800; letter-spacing: 0.5px;">SALDO FINAL</p>
+                <h3 style="margin:8px 0 0 0; color:#ea580c; font-size: 24px;">{{ saldo_final }}</h3>
+            </div>
+        </div>
         
         <div class="kardex-tabla-contenedor">
             <table class="kardex-tabla" style="min-width: 900px;">
