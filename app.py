@@ -3,6 +3,7 @@ import psycopg2.extras
 from psycopg2 import IntegrityError
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, session
 from datetime import datetime
+from functools import wraps
 import calendar
 import csv
 from io import StringIO, BytesIO
@@ -12,6 +13,16 @@ from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 app = Flask(__name__)
 # Clave secreta necesaria para los mensajes de éxito/error (flash)
 app.secret_key = 'mi_clave_secreta_kardex'
+
+# Decorador para proteger rutas/endpoints que solo puede usar un administrador
+# ya autenticado (misma sesión que usa la pantalla /admin).
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('admin_logged_in'):
+            return jsonify({'success': False, 'error': 'No autorizado. Debes iniciar sesión como administrador.'}), 403
+        return f(*args, **kwargs)
+    return decorated
 
 def get_db_connection():
     conn = psycopg2.connect(
@@ -1009,10 +1020,141 @@ def admin():
     
     cursor.execute('SELECT * FROM fuentes ORDER BY nombre ASC')
     fuentes = cursor.fetchall()
-    
+
+    cursor.execute('SELECT id, nombre FROM materiales ORDER BY nombre ASC')
+    materiales = cursor.fetchall()
+
     cursor.close()
     conn.close()
-    return render_template('admin.html', grupos=grupos, proveedores=proveedores, fuentes=fuentes)
+    return render_template('admin.html', grupos=grupos, proveedores=proveedores, fuentes=fuentes, materiales=materiales)
+
+
+# --- GESTIÓN DE MOVIMIENTOS (ENTRADAS/SALIDAS) DESDE EL ADMIN ---
+# Solo accesible con sesión de administrador iniciada (admin_required).
+
+def _movimiento_a_dict(m):
+    """Convierte una fila de movimientos (DictRow) a un dict serializable a JSON."""
+    d = dict(m)
+    d['cantidad'] = float(d['cantidad']) if d.get('cantidad') is not None else 0
+    d['precio_unitario'] = float(d['precio_unitario']) if d.get('precio_unitario') is not None else 0
+    d['fecha'] = str(d['fecha']) if d.get('fecha') else ''
+    d['fecha_factura'] = str(d['fecha_factura']) if d.get('fecha_factura') else ''
+    return d
+
+@app.route('/admin/movimientos')
+@admin_required
+def admin_listar_movimientos():
+    material_id = request.args.get('material_id', type=int)
+    tipo = request.args.get('tipo')
+    mes = request.args.get('mes')
+
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+    query = '''
+        SELECT mov.*, mat.nombre AS material_nombre, mat.unidad AS material_unidad
+        FROM movimientos mov
+        JOIN materiales mat ON mat.id = mov.material_id
+        WHERE 1=1
+    '''
+    params = []
+    if material_id:
+        query += ' AND mov.material_id = %s'
+        params.append(material_id)
+    if tipo in ('entrada', 'salida'):
+        query += ' AND mov.tipo = %s'
+        params.append(tipo)
+    if mes:
+        query += " AND to_char(mov.fecha, 'YYYY-MM') = %s"
+        params.append(mes)
+    query += ' ORDER BY mov.fecha DESC, mov.id DESC LIMIT 300'
+
+    cursor.execute(query, params)
+    movimientos = [_movimiento_a_dict(m) for m in cursor.fetchall()]
+    cursor.close()
+    conn.close()
+    return jsonify({'success': True, 'movimientos': movimientos})
+
+@app.route('/admin/movimiento/editar', methods=['POST'])
+@admin_required
+def admin_editar_movimiento():
+    data = request.json or {}
+    id_mov = data.get('id')
+
+    if not id_mov:
+        return jsonify({'success': False, 'error': 'Movimiento no especificado.'})
+
+    try:
+        cantidad = float(data.get('cantidad'))
+        precio_unitario = float(data.get('precio_unitario'))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'Cantidad o precio unitario inválidos.'})
+
+    fecha = data.get('fecha') or None
+    if not fecha:
+        return jsonify({'success': False, 'error': 'La fecha es obligatoria.'})
+
+    documento = data.get('documento', '')
+    numero_documento = (data.get('numero_documento') or '').strip()
+    fecha_factura = data.get('fecha_factura') or None
+    departamento = data.get('departamento', '')
+    solicitante = data.get('solicitante', '')
+
+    if not numero_documento:
+        return jsonify({'success': False, 'error': 'El correlativo/documento es obligatorio.'})
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # El correlativo debe seguir siendo único, excluyendo el propio registro
+        cursor.execute('SELECT id FROM movimientos WHERE numero_documento = %s AND id != %s', (numero_documento, id_mov))
+        if cursor.fetchone():
+            cursor.close()
+            conn.close()
+            return jsonify({'success': False, 'error': f"El correlativo '{numero_documento}' ya está en uso por otro movimiento."})
+
+        cursor.execute('''
+            UPDATE movimientos
+            SET cantidad = %s, precio_unitario = %s, fecha = %s, documento = %s,
+                numero_documento = %s, fecha_factura = %s, departamento = %s, solicitante = %s
+            WHERE id = %s
+        ''', (cantidad, precio_unitario, fecha, documento, numero_documento, fecha_factura, departamento, solicitante, id_mov))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({'success': True})
+    except Exception as e:
+        conn.rollback()
+        cursor.close()
+        conn.close()
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/admin/movimiento/eliminar', methods=['POST'])
+@admin_required
+def admin_eliminar_movimiento():
+    data = request.json or {}
+    id_mov = data.get('id')
+    pin = data.get('pin')
+
+    if pin != '1234':
+        return jsonify({'success': False, 'error': 'PIN incorrecto.'})
+    if not id_mov:
+        return jsonify({'success': False, 'error': 'Movimiento no especificado.'})
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('DELETE FROM movimientos WHERE id = %s', (id_mov,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({'success': True})
+    except Exception as e:
+        conn.rollback()
+        cursor.close()
+        conn.close()
+        return jsonify({'success': False, 'error': str(e)})
+
 
 @app.route('/eliminar_grupo/<int:id>', methods=['POST'])
 def eliminar_grupo(id):

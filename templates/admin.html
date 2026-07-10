@@ -1,8 +1,6 @@
 {% extends 'base.html' %}
 
 {% block content %}
-    <h2>Admin</h2>
-    
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, message in messages %}
@@ -15,6 +13,8 @@
       {% endif %}
     {% endwith %}
 
+    <div id="flash-ajax-contenedor"></div>
+
     <script>
         setTimeout(function() {
             document.querySelectorAll('.flash-mensaje').forEach(function(msg) {
@@ -23,7 +23,7 @@
             });
         }, 3000);
     </script>
-    
+
     {% if login_required %}
     <div class="card" style="max-width: 400px; margin: 50px auto; text-align: center; padding: 40px 30px;">
         <h3 style="color: #1e293b; margin-top: 0;">🔒 Acceso Restringido</h3>
@@ -39,201 +39,297 @@
         </div>
     </div>
     {% else %}
-    
-    <div style="text-align: right;">
-        <form method="POST" action="/admin" style="margin: 0; display: inline-block;">
+
+    <div class="admin-header">
+        <h2>⚙️ Panel de Administración</h2>
+        <form method="POST" action="/admin" style="margin: 0;">
             <input type="hidden" name="accion" value="logout">
             <button type="submit" class="btn btn-secundario" style="padding: 8px 16px; font-size: 13px;">Cerrar Sesión</button>
         </form>
     </div>
 
-    <div class="dashboard-grid" style="margin-top: 20px;">
+    <!-- BARRA DE PESTAÑAS -->
+    <div class="admin-tabs">
+        <button type="button" class="admin-tab-btn" data-tab="general" onclick="mostrarTabAdmin('general')">🗂️ General</button>
+        <button type="button" class="admin-tab-btn" data-tab="movimientos" onclick="mostrarTabAdmin('movimientos')">🔁 Movimientos</button>
+        <button type="button" class="admin-tab-btn" data-tab="seguridad" onclick="mostrarTabAdmin('seguridad')">🔐 Seguridad y Avanzado</button>
+    </div>
 
-        <!-- MÓDULO DE ACTUALIZACIÓN GENÉRICA -->
-        <div class="card" style="grid-column: 1 / -1;">
-            <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #ef4444; padding-bottom: 10px;">🛠️ Actualizar Registro Específico</h3>
-            <form method="POST" action="/admin" autocomplete="off" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end;">
-                <input type="hidden" name="accion" value="actualizar_registro">
-                
-                <div class="form-grupo" style="margin-bottom: 0;">
-                    <label>Tabla:</label>
-                    <select name="tabla" required>
-                        <option value="">Seleccione una tabla...</option>
-                        <option value="materiales">Materiales</option>
-                        <option value="movimientos">Movimientos</option>
-                        <option value="proveedores">Proveedores</option>
-                        <option value="fuentes">Fuentes</option>
-                        <option value="grupos">Grupos</option>
+    <!-- ============================ -->
+    <!-- PESTAÑA: GENERAL             -->
+    <!-- ============================ -->
+    <div id="tab-general" class="admin-tab-content">
+        <div class="dashboard-grid">
+
+            <!-- MÓDULO DE IMPORTACIÓN / EXPORTACIÓN -->
+            <div class="card" style="grid-column: 1 / -1;">
+                <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #8b5cf6; padding-bottom: 10px;">📦 Gestión de Inventario</h3>
+                <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                    <a href="/exportar_inventario" class="btn" style="background-color: #059669; flex: 1; min-width: 200px; text-align: center;">📥 Descargar Plantilla</a>
+                    <a href="{{ url_for('cargar_excel') }}" class="btn" style="background-color: #10b981; flex: 1; min-width: 200px; text-align: center;">📤 Carga Masiva</a>
+                </div>
+            </div>
+
+            <!-- MÓDULO DE GRUPOS -->
+            <div class="card">
+                <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #3b82f6; padding-bottom: 10px;">🏷️ Grupos de Material</h3>
+                <form method="POST" action="/admin" autocomplete="off">
+                    <input type="hidden" name="accion" value="grupo">
+                    <div class="form-grupo">
+                        <label>Nombre del Grupo:</label>
+                        <input type="text" name="nombre_grupo" required>
+                    </div>
+                    <button type="submit" class="btn" style="width: 100%;">Agregar Grupo</button>
+                </form>
+
+                <hr style="border: 1px solid #e2e8f0; margin: 20px 0;">
+
+                <div style="max-height: 220px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                        <thead>
+                            <tr style="background-color: #f8fafc; text-align: left;">
+                                <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; width: 40px;">ID</th>
+                                <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Nombre</th>
+                                <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; width: 40px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for grupo in grupos %}
+                            <tr>
+                                <td style="padding: 8px; border-bottom: 1px solid #f1f5f9;">{{ grupo['id'] }}</td>
+                                <td style="padding: 8px; border-bottom: 1px solid #f1f5f9;"><strong>{{ grupo['nombre'] }}</strong></td>
+                                <td style="padding: 8px; border-bottom: 1px solid #f1f5f9; text-align: right;">
+                                    <button type="button" class="btn btn-salida" style="padding: 4px 8px; font-size: 12px; margin: 0; box-shadow: none;" onclick="confirmarEliminacionAdmin('/eliminar_grupo/{{ grupo['id'] }}')" title="Eliminar Grupo">🗑️</button>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="3" style="padding: 10px; text-align: center; color: #7f8c8d;">No hay grupos registrados.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- MÓDULO DE PROVEEDORES -->
+            <div class="card">
+                <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #10b981; padding-bottom: 10px;">🏢 Proveedores</h3>
+                <form method="POST" action="/admin" autocomplete="off">
+                    <input type="hidden" name="accion" value="proveedor">
+                    <div class="form-grupo">
+                        <label>NIT:</label>
+                        <input type="text" name="nit" required>
+                        <label>Nombre del Proveedor:</label>
+                        <input type="text" name="nombre" required>
+                    </div>
+                    <button type="submit" class="btn btn-entrada" style="width: 100%;">Agregar Proveedor</button>
+                </form>
+
+                <hr style="border: 1px solid #e2e8f0; margin: 20px 0;">
+
+                <div style="max-height: 220px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                        <thead>
+                            <tr style="background-color: #f8fafc; text-align: left;">
+                                <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Proveedor</th>
+                                <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; width: 40px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for prov in proveedores %}
+                            <tr>
+                                <td style="padding: 8px; border-bottom: 1px solid #f1f5f9;"><strong>{{ prov['nombre'] }}</strong><br><small style="color: #64748b;">NIT: {{ prov['nit'] }} | ID: {{ prov['id'] }}</small></td>
+                                <td style="padding: 8px; border-bottom: 1px solid #f1f5f9; text-align: right;">
+                                    <button type="button" class="btn btn-salida" style="padding: 4px 8px; font-size: 12px; margin: 0; box-shadow: none;" onclick="confirmarEliminacionAdmin('/eliminar_proveedor/{{ prov['id'] }}')" title="Eliminar Proveedor">🗑️</button>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="2" style="padding: 10px; text-align: center; color: #7f8c8d;">No hay proveedores registrados.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- MÓDULO DE FUENTES -->
+            <div class="card">
+                <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #f59e0b; padding-bottom: 10px;">🏦 Fuentes (Quien paga)</h3>
+                <form method="POST" action="/admin" autocomplete="off">
+                    <input type="hidden" name="accion" value="fuente">
+                    <div class="form-grupo">
+                        <label>Nombre de la Fuente:</label>
+                        <input type="text" name="nombre_fuente" required>
+                    </div>
+                    <button type="submit" class="btn" style="width: 100%; background-color: #f59e0b; box-shadow: 0 4px 6px -1px rgba(245, 158, 11, 0.3);">Agregar Fuente</button>
+                </form>
+
+                <hr style="border: 1px solid #e2e8f0; margin: 20px 0;">
+
+                <div style="max-height: 220px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                        <thead>
+                            <tr style="background-color: #f8fafc; text-align: left;">
+                                <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Nombre de la Fuente</th>
+                                <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; width: 40px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for fuente in fuentes %}
+                            <tr>
+                                <td style="padding: 8px; border-bottom: 1px solid #f1f5f9;"><strong>{{ fuente['nombre'] }}</strong></td>
+                                <td style="padding: 8px; border-bottom: 1px solid #f1f5f9; text-align: right;">
+                                    <button type="button" class="btn btn-salida" style="padding: 4px 8px; font-size: 12px; margin: 0; box-shadow: none;" onclick="confirmarEliminacionAdmin('/eliminar_fuente/{{ fuente['id'] }}')" title="Eliminar Fuente">🗑️</button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ============================ -->
+    <!-- PESTAÑA: MOVIMIENTOS         -->
+    <!-- ============================ -->
+    <div id="tab-movimientos" class="admin-tab-content">
+        <div class="card">
+            <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #3b82f6; padding-bottom: 10px;">🔁 Editar o Eliminar Movimientos (Entradas / Salidas)</h3>
+            <div style="font-size: 13px; color: #64748b; background-color: #f8fafc; padding: 10px; border-radius: 8px; border-left: 4px solid #3b82f6; margin-bottom: 18px;">
+                <strong>ℹ️ Nota:</strong> El stock y los costos promedio del Kardex se recalculan automáticamente a partir de los movimientos, así que cualquier edición o eliminación aquí afecta de inmediato los saldos históricos. Úsalo con cuidado.
+            </div>
+
+            <div class="filtros-movimientos">
+                <div class="form-grupo">
+                    <label>Material:</label>
+                    <select id="filtroMaterial">
+                        <option value="">Todos los materiales</option>
+                        {% for mat in materiales %}
+                        <option value="{{ mat['id'] }}">{{ mat['nombre'] }}</option>
+                        {% endfor %}
                     </select>
                 </div>
-                
-                <div class="form-grupo" style="margin-bottom: 0;">
-                    <label>ID del Registro:</label>
-                    <input type="number" name="id_registro" required>
-                </div>
-                
-                <div class="form-grupo" style="margin-bottom: 0;">
-                    <label>Nombre de la Columna:</label>
-                    <input type="text" name="columna" required placeholder="Ej: precio_unitario">
-                </div>
-                
-                <div class="form-grupo" style="margin-bottom: 0;">
-                    <label>Nuevo Valor:</label>
-                    <input type="text" name="nuevo_valor" required>
-                </div>
-                
-                <button type="submit" class="btn btn-salida" style="height: 42px; margin-top: auto;">Actualizar</button>
-            </form>
-            <div style="margin-top: 15px; font-size: 13px; color: #64748b; background-color: #f8fafc; padding: 10px; border-radius: 8px; border-left: 4px solid #f59e0b;">
-                <strong>⚠️ Advertencia:</strong> Esta es una herramienta avanzada. Asegúrese de escribir el nombre exacto de la columna en la base de datos (por ejemplo: <code>precio_unitario</code>, <code>cantidad</code>, <code>fecha</code>, <code>numero_documento</code>, etc.).
-            </div>
-        </div>
-
-        <!-- MÓDULO DE IMPORTACIÓN / EXPORTACIÓN -->
-        <div class="card" style="grid-column: 1 / -1;">
-            <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #8b5cf6; padding-bottom: 10px;">📦 Gestión de Inventario</h3>
-            <div style="display: flex; gap: 15px;">
-                <a href="/exportar_inventario" class="btn" style="background-color: #059669; flex: 1; text-align: center;">📥 Descargar Plantilla</a>
-                <a href="{{ url_for('cargar_excel') }}" class="btn" style="background-color: #10b981; flex: 1; text-align: center;">📤 Carga Masiva</a>
-            </div>
-        </div>
-
-        <!-- MÓDULO DE GRUPOS -->
-        <div class="card">
-            <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #3b82f6; padding-bottom: 10px;">🏷️ Grupos de Material</h3>
-            <form method="POST" action="/admin" autocomplete="off">
-                <input type="hidden" name="accion" value="grupo">
                 <div class="form-grupo">
-                    <label>Nombre del Grupo:</label>
-                    <input type="text" name="nombre_grupo" required>
+                    <label>Tipo:</label>
+                    <select id="filtroTipo">
+                        <option value="">Todos</option>
+                        <option value="entrada">Entradas</option>
+                        <option value="salida">Salidas</option>
+                    </select>
                 </div>
-                <button type="submit" class="btn" style="width: 100%;">Agregar Grupo</button>
-            </form>
-            
-            <hr style="border: 1px solid #e2e8f0; margin: 20px 0;">
-            
-            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                <thead>
-                    <tr style="background-color: #f8fafc; text-align: left;">
-                        <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; width: 40px;">ID</th>
-                        <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Nombre</th>
-                        <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; width: 40px;"></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for grupo in grupos %}
-                    <tr>
-                        <td style="padding: 8px; border-bottom: 1px solid #f1f5f9;">{{ grupo['id'] }}</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #f1f5f9;"><strong>{{ grupo['nombre'] }}</strong></td>
-                        <td style="padding: 8px; border-bottom: 1px solid #f1f5f9; text-align: right;">
-                            <button type="button" class="btn btn-salida" style="padding: 4px 8px; font-size: 12px; margin: 0; box-shadow: none;" onclick="confirmarEliminacionAdmin('/eliminar_grupo/{{ grupo['id'] }}')" title="Eliminar Grupo">🗑️</button>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="3" style="padding: 10px; text-align: center; color: #7f8c8d;">No hay grupos registrados.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        <!-- MÓDULO DE PROVEEDORES -->
-        <div class="card">
-            <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #10b981; padding-bottom: 10px;">🏢 Proveedores</h3>
-            <form method="POST" action="/admin" autocomplete="off">
-                <input type="hidden" name="accion" value="proveedor">
                 <div class="form-grupo">
-                    <label>NIT:</label>
-                    <input type="text" name="nit" required>
-                    <label>Nombre del Proveedor:</label>
-                    <input type="text" name="nombre" required>
+                    <label>Mes:</label>
+                    <input type="month" id="filtroMes">
                 </div>
-                <button type="submit" class="btn btn-entrada" style="width: 100%;">Agregar Proveedor</button>
-            </form>
-            
-            <hr style="border: 1px solid #e2e8f0; margin: 20px 0;">
-            
-            <div style="max-height: 250px; overflow-y: auto;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <div class="form-grupo" style="flex: 0;">
+                    <label>&nbsp;</label>
+                    <button type="button" class="btn" style="white-space: nowrap;" onclick="cargarMovimientosAdmin()">🔍 Buscar</button>
+                </div>
+                <div class="form-grupo" style="flex: 0;">
+                    <label>&nbsp;</label>
+                    <button type="button" class="btn btn-secundario" style="white-space: nowrap;" onclick="limpiarFiltrosMovimientos()">Limpiar</button>
+                </div>
+            </div>
+
+            <div class="mov-tabla-contenedor">
+                <table class="mov-tabla">
                     <thead>
-                        <tr style="background-color: #f8fafc; text-align: left;">
-                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Proveedor</th>
-                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; width: 40px;"></th>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Material</th>
+                            <th>Tipo</th>
+                            <th>Cantidad</th>
+                            <th>Precio Unit. (Q)</th>
+                            <th>Documento</th>
+                            <th>Correlativo</th>
+                            <th>Acciones</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {% for prov in proveedores %}
-                        <tr>
-                            <td style="padding: 8px; border-bottom: 1px solid #f1f5f9;"><strong>{{ prov['nombre'] }}</strong><br><small style="color: #64748b;">NIT: {{ prov['nit'] }} | ID: {{ prov['id'] }}</small></td>
-                            <td style="padding: 8px; border-bottom: 1px solid #f1f5f9; text-align: right;">
-                                <button type="button" class="btn btn-salida" style="padding: 4px 8px; font-size: 12px; margin: 0; box-shadow: none;" onclick="confirmarEliminacionAdmin('/eliminar_proveedor/{{ prov['id'] }}')" title="Eliminar Proveedor">🗑️</button>
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="2" style="padding: 10px; text-align: center; color: #7f8c8d;">No hay proveedores registrados.</td>
-                        </tr>
-                        {% endfor %}
+                    <tbody id="cuerpoTablaMovimientos">
+                        <tr><td colspan="8" class="mov-estado-cargando">Cargando movimientos...</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
-
-        <!-- MÓDULO DE FUENTES -->
-        <div class="card">
-            <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #f59e0b; padding-bottom: 10px;">🏦 Fuentes (Quien paga)</h3>
-            <form method="POST" action="/admin" autocomplete="off">
-                <input type="hidden" name="accion" value="fuente">
-                <div class="form-grupo">
-                    <label>Nombre de la Fuente:</label>
-                    <input type="text" name="nombre_fuente" required>
-                </div>
-                <button type="submit" class="btn" style="width: 100%; background-color: #f59e0b; box-shadow: 0 4px 6px -1px rgba(245, 158, 11, 0.3);">Agregar Fuente</button>
-            </form>
-            
-            <hr style="border: 1px solid #e2e8f0; margin: 20px 0;">
-            
-            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                <thead>
-                    <tr style="background-color: #f8fafc; text-align: left;">
-                        <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Nombre de la Fuente</th>
-                        <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; width: 40px;"></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for fuente in fuentes %}
-                    <tr>
-                        <td style="padding: 8px; border-bottom: 1px solid #f1f5f9;"><strong>{{ fuente['nombre'] }}</strong></td>
-                        <td style="padding: 8px; border-bottom: 1px solid #f1f5f9; text-align: right;">
-                            <button type="button" class="btn btn-salida" style="padding: 4px 8px; font-size: 12px; margin: 0; box-shadow: none;" onclick="confirmarEliminacionAdmin('/eliminar_fuente/{{ fuente['id'] }}')" title="Eliminar Fuente">🗑️</button>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        <div class="card">
-            <h3>Gestionar IPs Autorizadas</h3>
-            <form method="POST">
-                <input type="hidden" name="accion" value="agregar_ip">
-                <input type="text" name="nueva_ip" placeholder="Ej: 192.168.1.75" required>
-                <input type="text" name="desc_ip" placeholder="Descripción (ej: PC Contador)" required>
-                <button type="submit">Autorizar IP</button>
-            </form>
-            </div>
     </div>
 
+    <!-- ============================ -->
+    <!-- PESTAÑA: SEGURIDAD/AVANZADO  -->
+    <!-- ============================ -->
+    <div id="tab-seguridad" class="admin-tab-content">
+        <div class="dashboard-grid">
 
+            <div class="card">
+                <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #06b6d4; padding-bottom: 10px;">🌐 Gestionar IPs Autorizadas</h3>
+                <form method="POST" action="/admin" autocomplete="off">
+                    <input type="hidden" name="accion" value="agregar_ip">
+                    <div class="form-grupo">
+                        <label>Nueva IP:</label>
+                        <input type="text" name="nueva_ip" placeholder="Ej: 192.168.1.75" required>
+                        <label>Descripción:</label>
+                        <input type="text" name="desc_ip" placeholder="Ej: PC Contador" required>
+                    </div>
+                    <button type="submit" class="btn" style="width: 100%;">Autorizar IP</button>
+                </form>
+            </div>
+
+            <!-- MÓDULO DE ACTUALIZACIÓN GENÉRICA (herramienta avanzada, colapsada por defecto) -->
+            <details class="card card-peligro" style="grid-column: 1 / -1;">
+                <summary>
+                    <span style="border-bottom: none; color: #1e293b;">🛠️ Actualizar Registro Específico (Herramienta Avanzada)</span>
+                    <span class="chevron">▶</span>
+                </summary>
+                <form method="POST" action="/admin" autocomplete="off" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; margin-top: 18px;">
+                    <input type="hidden" name="accion" value="actualizar_registro">
+
+                    <div class="form-grupo" style="margin-bottom: 0;">
+                        <label>Tabla:</label>
+                        <select name="tabla" required>
+                            <option value="">Seleccione una tabla...</option>
+                            <option value="materiales">Materiales</option>
+                            <option value="movimientos">Movimientos</option>
+                            <option value="proveedores">Proveedores</option>
+                            <option value="fuentes">Fuentes</option>
+                            <option value="grupos">Grupos</option>
+                        </select>
+                    </div>
+
+                    <div class="form-grupo" style="margin-bottom: 0;">
+                        <label>ID del Registro:</label>
+                        <input type="number" name="id_registro" required>
+                    </div>
+
+                    <div class="form-grupo" style="margin-bottom: 0;">
+                        <label>Nombre de la Columna:</label>
+                        <input type="text" name="columna" required placeholder="Ej: precio_unitario">
+                    </div>
+
+                    <div class="form-grupo" style="margin-bottom: 0;">
+                        <label>Nuevo Valor:</label>
+                        <input type="text" name="nuevo_valor" required>
+                    </div>
+
+                    <button type="submit" class="btn btn-salida" style="height: 42px; margin-top: auto;">Actualizar</button>
+                </form>
+                <div style="margin-top: 15px; font-size: 13px; color: #64748b; background-color: #f8fafc; padding: 10px; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                    <strong>⚠️ Advertencia:</strong> Esta es una herramienta avanzada sin validaciones de negocio (por ejemplo, correlativos duplicados). Para editar movimientos, usa mejor la pestaña <strong>🔁 Movimientos</strong>. Asegúrese de escribir el nombre exacto de la columna en la base de datos.
+                </div>
+            </details>
+
+        </div>
+    </div>
 
     <div style="text-align: center; margin-top: 30px;">
         <a href="/" class="btn" style="background-color: #7f8c8d;">Volver al Inicio</a>
     </div>
 
-    <!-- Overlay y Modal para Eliminar con PIN -->
+    <!-- Overlay y Modal para Eliminar con PIN (grupos / proveedores / fuentes / movimientos) -->
     <div class="overlay" id="overlayEliminarAdmin" onclick="cerrarModalEliminarAdmin()" style="z-index: 1200;"></div>
-    
+
     <div class="modal" id="modalEliminarAdmin" style="z-index: 1250; width: 350px;">
         <h3 style="color: #e74c3c; margin-top: 0; text-align: center;">🗑️ Confirmar Eliminación</h3>
         <p style="color: #64748b; font-size: 13px; text-align: center; margin-bottom: 20px;">Ingrese el PIN de seguridad (1234) para eliminar este registro permanentemente.</p>
@@ -247,15 +343,105 @@
         </div>
     </div>
 
+    <!-- Modal de edición de movimiento -->
+    <div class="overlay" id="overlayEditarMovimiento" onclick="cerrarModalEditarMovimiento()" style="z-index: 1300;"></div>
+    <div class="modal modal-movimiento" id="modalEditarMovimiento" style="z-index: 1350;">
+        <h3 style="color: #1e293b; margin-top: 0;">✏️ Editar Movimiento <span id="tituloTipoMovimiento" class="badge-tipo" style="margin-left: 8px;"></span></h3>
+        <p id="materialMovimientoTexto" style="color: #64748b; font-size: 13px; margin-top: -8px; margin-bottom: 18px;"></p>
+
+        <input type="hidden" id="editMovId">
+
+        <div class="form-grid-2">
+            <div class="form-grupo">
+                <label>Cantidad:</label>
+                <input type="number" step="0.01" id="editMovCantidad" required>
+            </div>
+            <div class="form-grupo">
+                <label>Precio Unitario (Q):</label>
+                <input type="number" step="0.0001" id="editMovPrecio" required>
+            </div>
+            <div class="form-grupo">
+                <label>Fecha:</label>
+                <input type="date" id="editMovFecha" required>
+            </div>
+            <div class="form-grupo">
+                <label>Correlativo / No. Documento:</label>
+                <input type="text" id="editMovNumeroDocumento" required>
+            </div>
+            <div class="form-grupo" id="grupoDocumentoMov">
+                <label>Documento:</label>
+                <input type="text" id="editMovDocumento">
+            </div>
+            <div class="form-grupo" id="grupoFechaFacturaMov">
+                <label>Fecha de Factura:</label>
+                <input type="date" id="editMovFechaFactura">
+            </div>
+            <div class="form-grupo" id="grupoDepartamentoMov">
+                <label>Departamento:</label>
+                <input type="text" id="editMovDepartamento">
+            </div>
+            <div class="form-grupo" id="grupoSolicitanteMov">
+                <label>Solicitante:</label>
+                <input type="text" id="editMovSolicitante">
+            </div>
+        </div>
+
+        <div id="errorEditarMovimiento" style="color: #e74c3c; font-size: 13px; text-align: center; display: none; margin-top: 5px;"></div>
+
+        <div class="modal-acciones">
+            <button type="button" class="btn btn-secundario" onclick="cerrarModalEditarMovimiento()">Cancelar</button>
+            <button type="button" class="btn" onclick="guardarEdicionMovimiento()">Guardar Cambios</button>
+        </div>
+    </div>
+
     <script>
+        // ============================================================
+        // MANEJO DE PESTAÑAS DEL ADMIN
+        // ============================================================
+        function mostrarTabAdmin(nombre) {
+            document.querySelectorAll('.admin-tab-content').forEach(function(el) { el.classList.remove('activo'); });
+            document.querySelectorAll('.admin-tab-btn').forEach(function(el) { el.classList.remove('activo'); });
+
+            document.getElementById('tab-' + nombre).classList.add('activo');
+            document.querySelector('.admin-tab-btn[data-tab="' + nombre + '"]').classList.add('activo');
+
+            try { localStorage.setItem('adminTabActiva', nombre); } catch (e) {}
+
+            if (nombre === 'movimientos') {
+                cargarMovimientosAdmin();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            let tabGuardada = 'general';
+            try { tabGuardada = localStorage.getItem('adminTabActiva') || 'general'; } catch (e) {}
+            mostrarTabAdmin(tabGuardada);
+        });
+
+        // ============================================================
+        // MODAL GENÉRICO DE ELIMINACIÓN CON PIN
+        // Soporta el modo clásico (envía un <form> a una URL) y el
+        // modo AJAX (ejecuta un callback, usado por movimientos).
+        // ============================================================
         let formEliminarAdmin = null;
+        let callbackEliminarAdmin = null;
 
         function confirmarEliminacionAdmin(actionUrl) {
             const form = document.createElement('form');
             form.method = 'POST';
             form.action = actionUrl;
             formEliminarAdmin = form;
-            
+            callbackEliminarAdmin = null;
+            abrirModalEliminarAdmin();
+        }
+
+        function confirmarEliminacionAdminCallback(callback) {
+            formEliminarAdmin = null;
+            callbackEliminarAdmin = callback;
+            abrirModalEliminarAdmin();
+        }
+
+        function abrirModalEliminarAdmin() {
             document.getElementById('modalEliminarAdmin').style.display = 'block';
             document.getElementById('overlayEliminarAdmin').classList.add('activo');
             document.getElementById('inputPinEliminarAdmin').value = '';
@@ -267,15 +453,224 @@
             document.getElementById('modalEliminarAdmin').style.display = 'none';
             document.getElementById('overlayEliminarAdmin').classList.remove('activo');
             formEliminarAdmin = null;
+            callbackEliminarAdmin = null;
         }
 
         function ejecutarEliminacionAdmin() {
             const pin = document.getElementById('inputPinEliminarAdmin').value;
-            if (pin === "1234") {
-                if (formEliminarAdmin) { document.body.appendChild(formEliminarAdmin); formEliminarAdmin.submit(); }
-            } else {
+            if (pin !== "1234") {
                 document.getElementById('errorPinEliminarAdmin').style.display = 'block';
+                return;
             }
+            if (formEliminarAdmin) {
+                document.body.appendChild(formEliminarAdmin);
+                formEliminarAdmin.submit();
+            } else if (callbackEliminarAdmin) {
+                callbackEliminarAdmin(pin);
+                cerrarModalEliminarAdmin();
+            }
+        }
+
+        // ============================================================
+        // MÓDULO DE MOVIMIENTOS (listar / editar / eliminar)
+        // ============================================================
+        function mostrarFlashAjax(mensaje, tipo) {
+            const cont = document.getElementById('flash-ajax-contenedor');
+            const div = document.createElement('div');
+            div.className = 'flash-mensaje';
+            div.style.padding = '15px';
+            div.style.marginBottom = '20px';
+            div.style.borderRadius = '5px';
+            div.style.textAlign = 'center';
+            div.style.fontWeight = 'bold';
+            div.style.transition = 'opacity 0.5s ease';
+            if (tipo === 'error') {
+                div.style.backgroundColor = '#f8d7da';
+                div.style.color = '#721c24';
+                div.style.border = '1px solid #f5c6cb';
+            } else {
+                div.style.backgroundColor = '#d4edda';
+                div.style.color = '#155724';
+                div.style.border = '1px solid #c3e6cb';
+            }
+            div.textContent = mensaje;
+            cont.prepend(div);
+            setTimeout(function() {
+                div.style.opacity = '0';
+                setTimeout(function() { div.remove(); }, 500);
+            }, 3500);
+        }
+
+        function limpiarFiltrosMovimientos() {
+            document.getElementById('filtroMaterial').value = '';
+            document.getElementById('filtroTipo').value = '';
+            document.getElementById('filtroMes').value = '';
+            cargarMovimientosAdmin();
+        }
+
+        function escaparHtml(texto) {
+            const div = document.createElement('div');
+            div.textContent = texto === null || texto === undefined ? '' : texto;
+            return div.innerHTML;
+        }
+
+        function cargarMovimientosAdmin() {
+            const materialId = document.getElementById('filtroMaterial').value;
+            const tipo = document.getElementById('filtroTipo').value;
+            const mes = document.getElementById('filtroMes').value;
+
+            const params = new URLSearchParams();
+            if (materialId) params.set('material_id', materialId);
+            if (tipo) params.set('tipo', tipo);
+            if (mes) params.set('mes', mes);
+
+            const tbody = document.getElementById('cuerpoTablaMovimientos');
+            tbody.innerHTML = '<tr><td colspan="8" class="mov-estado-cargando">Cargando movimientos...</td></tr>';
+
+            fetch('/admin/movimientos?' + params.toString())
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (!data.success) {
+                        tbody.innerHTML = '<tr><td colspan="8" class="mov-estado-vacio">' + escaparHtml(data.error || 'No se pudieron cargar los movimientos.') + '</td></tr>';
+                        return;
+                    }
+                    renderizarTablaMovimientos(data.movimientos);
+                })
+                .catch(function() {
+                    tbody.innerHTML = '<tr><td colspan="8" class="mov-estado-vacio">Error de conexión al cargar movimientos.</td></tr>';
+                });
+        }
+
+        function renderizarTablaMovimientos(movimientos) {
+            const tbody = document.getElementById('cuerpoTablaMovimientos');
+            if (!movimientos || movimientos.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="mov-estado-vacio">No hay movimientos que coincidan con el filtro.</td></tr>';
+                return;
+            }
+
+            let html = '';
+            movimientos.forEach(function(m) {
+                const esEntrada = m.tipo === 'entrada';
+                const badgeClase = esEntrada ? 'badge-entrada' : 'badge-salida';
+                const badgeTexto = esEntrada ? 'Entrada' : 'Salida';
+                const docInfo = m.documento ? escaparHtml(m.documento) : '-';
+
+                html += '<tr>';
+                html += '<td>' + escaparHtml(m.fecha) + '</td>';
+                html += '<td>' + escaparHtml(m.material_nombre) + '</td>';
+                html += '<td><span class="badge-tipo ' + badgeClase + '">' + badgeTexto + '</span></td>';
+                html += '<td>' + Number(m.cantidad).toLocaleString() + ' ' + escaparHtml(m.material_unidad || '') + '</td>';
+                html += '<td>Q ' + Number(m.precio_unitario).toFixed(4) + '</td>';
+                html += '<td>' + docInfo + '</td>';
+                html += '<td>' + escaparHtml(m.numero_documento) + '</td>';
+                html += '<td class="mov-acciones">';
+                html += '<button type="button" class="btn" onclick="abrirModalEditarMovimiento(' + m.id + ')" title="Editar">✏️</button>';
+                html += '<button type="button" class="btn btn-salida" onclick="confirmarEliminarMovimiento(' + m.id + ')" title="Eliminar">🗑️</button>';
+                html += '</td>';
+                html += '</tr>';
+            });
+            tbody.innerHTML = html;
+
+            // Guardamos los datos completos en memoria para poder abrir el modal de edición sin volver a pedirlos
+            window._movimientosCache = {};
+            movimientos.forEach(function(m) { window._movimientosCache[m.id] = m; });
+        }
+
+        function abrirModalEditarMovimiento(id) {
+            const m = (window._movimientosCache || {})[id];
+            if (!m) return;
+
+            document.getElementById('editMovId').value = m.id;
+            document.getElementById('editMovCantidad').value = m.cantidad;
+            document.getElementById('editMovPrecio').value = m.precio_unitario;
+            document.getElementById('editMovFecha').value = m.fecha;
+            document.getElementById('editMovNumeroDocumento').value = m.numero_documento || '';
+            document.getElementById('editMovDocumento').value = m.documento || '';
+            document.getElementById('editMovFechaFactura').value = m.fecha_factura || '';
+            document.getElementById('editMovDepartamento').value = m.departamento || '';
+            document.getElementById('editMovSolicitante').value = m.solicitante || '';
+
+            const esEntrada = m.tipo === 'entrada';
+            const badge = document.getElementById('tituloTipoMovimiento');
+            badge.textContent = esEntrada ? 'Entrada' : 'Salida';
+            badge.className = 'badge-tipo ' + (esEntrada ? 'badge-entrada' : 'badge-salida');
+
+            document.getElementById('materialMovimientoTexto').textContent = m.material_nombre + ' — ID de movimiento #' + m.id;
+
+            // Campos relevantes según el tipo de movimiento
+            document.getElementById('grupoFechaFacturaMov').style.display = esEntrada ? 'flex' : 'none';
+            document.getElementById('grupoDepartamentoMov').style.display = esEntrada ? 'none' : 'flex';
+            document.getElementById('grupoSolicitanteMov').style.display = esEntrada ? 'none' : 'flex';
+
+            document.getElementById('errorEditarMovimiento').style.display = 'none';
+
+            document.getElementById('modalEditarMovimiento').style.display = 'block';
+            document.getElementById('overlayEditarMovimiento').classList.add('activo');
+        }
+
+        function cerrarModalEditarMovimiento() {
+            document.getElementById('modalEditarMovimiento').style.display = 'none';
+            document.getElementById('overlayEditarMovimiento').classList.remove('activo');
+        }
+
+        function guardarEdicionMovimiento() {
+            const errorDiv = document.getElementById('errorEditarMovimiento');
+            errorDiv.style.display = 'none';
+
+            const payload = {
+                id: document.getElementById('editMovId').value,
+                cantidad: document.getElementById('editMovCantidad').value,
+                precio_unitario: document.getElementById('editMovPrecio').value,
+                fecha: document.getElementById('editMovFecha').value,
+                numero_documento: document.getElementById('editMovNumeroDocumento').value,
+                documento: document.getElementById('editMovDocumento').value,
+                fecha_factura: document.getElementById('editMovFechaFactura').value,
+                departamento: document.getElementById('editMovDepartamento').value,
+                solicitante: document.getElementById('editMovSolicitante').value
+            };
+
+            fetch('/admin/movimiento/editar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    cerrarModalEditarMovimiento();
+                    mostrarFlashAjax('Éxito: Movimiento actualizado correctamente.', 'success');
+                    cargarMovimientosAdmin();
+                } else {
+                    errorDiv.textContent = '❌ ' + (data.error || 'No se pudo actualizar el movimiento.');
+                    errorDiv.style.display = 'block';
+                }
+            })
+            .catch(function() {
+                errorDiv.textContent = '❌ Error de conexión al guardar los cambios.';
+                errorDiv.style.display = 'block';
+            });
+        }
+
+        function confirmarEliminarMovimiento(id) {
+            confirmarEliminacionAdminCallback(function(pin) {
+                fetch('/admin/movimiento/eliminar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: id, pin: pin })
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        mostrarFlashAjax('Éxito: Movimiento eliminado correctamente.', 'success');
+                        cargarMovimientosAdmin();
+                    } else {
+                        mostrarFlashAjax(data.error || 'No se pudo eliminar el movimiento.', 'error');
+                    }
+                })
+                .catch(function() {
+                    mostrarFlashAjax('Error de conexión al eliminar el movimiento.', 'error');
+                });
+            });
         }
     </script>
     {% endif %}

@@ -105,3 +105,56 @@ nav a:hover { background-color: #f1f5f9; color: #2563eb; transform: translateY(-
     .hdr-gris, .hdr-amarillo, .hdr-verde, .hdr-azul, .hdr-naranja { font-size: 10px; letter-spacing: 0; }
     nav a { padding: 8px 12px; font-size: 13px; }
 }
+
+/* ============================================================ */
+/* --- PANEL DE ADMINISTRACIÓN: PESTAÑAS Y MÓDULO MOVIMIENTOS --- */
+/* ============================================================ */
+
+.admin-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+.admin-header h2 { margin: 0; }
+
+/* Barra de pestañas */
+.admin-tabs { display: flex; gap: 6px; background-color: #ffffff; padding: 6px; border-radius: 12px; box-shadow: 0 2px 4px -1px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; margin-bottom: 24px; flex-wrap: wrap; }
+.admin-tab-btn { flex: 1; min-width: 140px; text-align: center; padding: 10px 16px; border: none; background: transparent; border-radius: 8px; font-weight: 600; font-size: 14px; color: #64748b; cursor: pointer; transition: all 0.2s ease; }
+.admin-tab-btn:hover { background-color: #f1f5f9; color: #1e293b; }
+.admin-tab-btn.activo { background-color: #1e293b; color: #ffffff; box-shadow: 0 4px 6px -1px rgba(30, 41, 59, 0.3); }
+.admin-tab-content { display: none; }
+.admin-tab-content.activo { display: block; }
+
+/* Tarjeta colapsable para herramientas avanzadas/peligrosas */
+.card-peligro { border-color: #fecaca; }
+.card-peligro summary { cursor: pointer; font-weight: 700; color: #1e293b; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+.card-peligro summary::-webkit-details-marker { display: none; }
+.card-peligro summary .chevron { transition: transform 0.2s; color: #94a3b8; }
+.card-peligro[open] summary .chevron { transform: rotate(90deg); }
+.card-peligro summary:after { content: ''; }
+
+/* Filtros del módulo de movimientos */
+.filtros-movimientos { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 18px; }
+.filtros-movimientos .form-grupo { margin-bottom: 0; min-width: 160px; flex: 1; }
+
+/* Tabla de movimientos */
+.mov-tabla-contenedor { overflow-x: auto; background-color: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; max-height: 65vh; overflow-y: auto; }
+.mov-tabla { width: 100%; border-collapse: collapse; min-width: 900px; font-size: 13px; }
+.mov-tabla thead th { position: sticky; top: 0; background-color: #f8fafc; color: #475569; font-weight: 700; text-transform: uppercase; font-size: 11px; letter-spacing: 0.4px; padding: 10px 12px; border-bottom: 2px solid #e2e8f0; text-align: left; z-index: 2; }
+.mov-tabla tbody td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+.mov-tabla tbody tr:hover td { background-color: #f8fafc; }
+
+.badge-tipo { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
+.badge-entrada { background-color: #d1fae5; color: #065f46; }
+.badge-salida { background-color: #fee2e2; color: #991b1b; }
+
+.mov-acciones { display: flex; gap: 6px; white-space: nowrap; }
+.mov-acciones button { padding: 5px 9px; font-size: 12px; margin: 0; box-shadow: none; border-radius: 6px; }
+
+.mov-estado-vacio, .mov-estado-cargando { text-align: center; padding: 30px; color: #94a3b8; font-size: 14px; }
+
+/* Modal de edición de movimiento (más ancho que el modal estándar) */
+.modal-movimiento { width: 480px; max-width: 92vw; text-align: left; }
+.modal-movimiento .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+
+@media (max-width: 640px) {
+    .admin-tabs { flex-direction: column; }
+    .admin-tab-btn { width: 100%; }
+    .modal-movimiento .form-grid-2 { grid-template-columns: 1fr; }
+}
