@@ -61,15 +61,6 @@
     <div id="tab-general" class="admin-tab-content">
         <div class="dashboard-grid">
 
-            <!-- MÓDULO DE IMPORTACIÓN / EXPORTACIÓN -->
-            <div class="card" style="grid-column: 1 / -1;">
-                <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #8b5cf6; padding-bottom: 10px;">📦 Gestión de Inventario</h3>
-                <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                    <a href="/exportar_inventario" class="btn" style="background-color: #059669; flex: 1; min-width: 200px; text-align: center;">📥 Descargar Plantilla</a>
-                    <a href="{{ url_for('cargar_excel') }}" class="btn" style="background-color: #10b981; flex: 1; min-width: 200px; text-align: center;">📤 Carga Masiva</a>
-                </div>
-            </div>
-
             <!-- MÓDULO DE GRUPOS -->
             <div class="card">
                 <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #3b82f6; padding-bottom: 10px;">🏷️ Grupos de Material</h3>
@@ -190,6 +181,16 @@
                 </div>
             </div>
 
+            <!-- MÓDULO DE IMPORTACIÓN / EXPORTACIÓN -->
+            <div class="card">
+                <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #8b5cf6; padding-bottom: 10px;">📦 Gestión de Inventario</h3>
+                <p style="color: #64748b; font-size: 13px; margin-top: 0;">Descarga la plantilla para preparar tus datos, o súbela ya llena para actualizar el inventario en lote.</p>
+                <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 20px;">
+                    <a href="/exportar_inventario" class="btn" style="background-color: #059669; text-align: center;">📥 Descargar Plantilla</a>
+                    <a href="{{ url_for('cargar_excel') }}" class="btn" style="background-color: #10b981; text-align: center;">📤 Carga Masiva</a>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -263,67 +264,58 @@
     <div id="tab-seguridad" class="admin-tab-content">
         <div class="dashboard-grid">
 
-            <div class="card">
-                <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #06b6d4; padding-bottom: 10px;">🌐 Gestionar IPs Autorizadas</h3>
-                <form method="POST" action="/admin" autocomplete="off">
+            <div class="card" style="grid-column: 1 / -1;">
+                <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #06b6d4; padding-bottom: 10px;">🌐 IPs Autorizadas</h3>
+                <p style="color: #64748b; font-size: 13px; margin-top: 0;">Solo los equipos con una IP en esta lista pueden ver el Kardex completo; el resto se redirige a la vista de consulta.</p>
+
+                <form method="POST" action="/admin" autocomplete="off" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; margin-bottom: 20px;">
                     <input type="hidden" name="accion" value="agregar_ip">
-                    <div class="form-grupo">
+                    <div class="form-grupo" style="margin-bottom: 0;">
                         <label>Nueva IP:</label>
                         <input type="text" name="nueva_ip" placeholder="Ej: 192.168.1.75" required>
+                    </div>
+                    <div class="form-grupo" style="margin-bottom: 0;">
                         <label>Descripción:</label>
                         <input type="text" name="desc_ip" placeholder="Ej: PC Contador" required>
                     </div>
-                    <button type="submit" class="btn" style="width: 100%;">Autorizar IP</button>
+                    <button type="submit" class="btn" style="height: 42px; margin-top: auto;">Autorizar IP</button>
                 </form>
-            </div>
 
-            <!-- MÓDULO DE ACTUALIZACIÓN GENÉRICA (herramienta avanzada, colapsada por defecto) -->
-            <details class="card card-peligro" style="grid-column: 1 / -1;">
-                <summary>
-                    <span style="border-bottom: none; color: #1e293b;">🛠️ Actualizar Registro Específico (Herramienta Avanzada)</span>
-                    <span class="chevron">▶</span>
-                </summary>
-                <form method="POST" action="/admin" autocomplete="off" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; margin-top: 18px;">
-                    <input type="hidden" name="accion" value="actualizar_registro">
+                <hr style="border: 1px solid #e2e8f0; margin: 20px 0;">
 
-                    <div class="form-grupo" style="margin-bottom: 0;">
-                        <label>Tabla:</label>
-                        <select name="tabla" required>
-                            <option value="">Seleccione una tabla...</option>
-                            <option value="materiales">Materiales</option>
-                            <option value="movimientos">Movimientos</option>
-                            <option value="proveedores">Proveedores</option>
-                            <option value="fuentes">Fuentes</option>
-                            <option value="grupos">Grupos</option>
-                        </select>
-                    </div>
-
-                    <div class="form-grupo" style="margin-bottom: 0;">
-                        <label>ID del Registro:</label>
-                        <input type="number" name="id_registro" required>
-                    </div>
-
-                    <div class="form-grupo" style="margin-bottom: 0;">
-                        <label>Nombre de la Columna:</label>
-                        <input type="text" name="columna" required placeholder="Ej: precio_unitario">
-                    </div>
-
-                    <div class="form-grupo" style="margin-bottom: 0;">
-                        <label>Nuevo Valor:</label>
-                        <input type="text" name="nuevo_valor" required>
-                    </div>
-
-                    <button type="submit" class="btn btn-salida" style="height: 42px; margin-top: auto;">Actualizar</button>
-                </form>
-                <div style="margin-top: 15px; font-size: 13px; color: #64748b; background-color: #f8fafc; padding: 10px; border-radius: 8px; border-left: 4px solid #f59e0b;">
-                    <strong>⚠️ Advertencia:</strong> Esta es una herramienta avanzada sin validaciones de negocio (por ejemplo, correlativos duplicados). Para editar movimientos, usa mejor la pestaña <strong>🔁 Movimientos</strong>. Asegúrese de escribir el nombre exacto de la columna en la base de datos.
+                <div style="max-height: 320px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                        <thead>
+                            <tr style="background-color: #f8fafc; text-align: left;">
+                                <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Dirección IP</th>
+                                <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Descripción</th>
+                                <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; width: 40px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ip in ips %}
+                            <tr>
+                                <td style="padding: 8px; border-bottom: 1px solid #f1f5f9;"><strong>{{ ip['ip_direccion'] }}</strong></td>
+                                <td style="padding: 8px; border-bottom: 1px solid #f1f5f9; color: #64748b;">{{ ip['descripcion'] }}</td>
+                                <td style="padding: 8px; border-bottom: 1px solid #f1f5f9; text-align: right;">
+                                    <button type="button" class="btn btn-salida" style="padding: 4px 8px; font-size: 12px; margin: 0; box-shadow: none;" onclick="confirmarEliminacionAdmin('/eliminar_ip/{{ ip['id'] }}')" title="Eliminar IP">🗑️</button>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="3" style="padding: 10px; text-align: center; color: #7f8c8d;">No hay IPs registradas todavía.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
-            </details>
+            </div>
 
         </div>
     </div>
 
     <div style="text-align: center; margin-top: 30px;">
+
         <a href="/" class="btn" style="background-color: #7f8c8d;">Volver al Inicio</a>
     </div>
 

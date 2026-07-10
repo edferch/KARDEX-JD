@@ -121,14 +121,6 @@ nav a:hover { background-color: #f1f5f9; color: #2563eb; transform: translateY(-
 .admin-tab-content { display: none; }
 .admin-tab-content.activo { display: block; }
 
-/* Tarjeta colapsable para herramientas avanzadas/peligrosas */
-.card-peligro { border-color: #fecaca; }
-.card-peligro summary { cursor: pointer; font-weight: 700; color: #1e293b; list-style: none; display: flex; align-items: center; justify-content: space-between; }
-.card-peligro summary::-webkit-details-marker { display: none; }
-.card-peligro summary .chevron { transition: transform 0.2s; color: #94a3b8; }
-.card-peligro[open] summary .chevron { transform: rotate(90deg); }
-.card-peligro summary:after { content: ''; }
-
 /* Filtros del módulo de movimientos */
 .filtros-movimientos { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 18px; }
 .filtros-movimientos .form-grupo { margin-bottom: 0; min-width: 160px; flex: 1; }

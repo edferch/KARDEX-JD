@@ -940,7 +940,7 @@ def admin():
     # --- SISTEMA DE LOGIN PARA LA PANTALLA DE ADMIN ---
     if not session.get('admin_logged_in'):
         if request.method == 'POST':
-            if request.form.get('admin_password') == 'admin123': # <- Contraseña de administrador
+            if request.form.get('admin_password') == 'laFabrica1': # <- Contraseña de administrador
                 session['admin_logged_in'] = True
                 flash("Acceso concedido.", "success")
                 return redirect(url_for('admin'))
@@ -979,29 +979,6 @@ def admin():
             except IntegrityError:
                 conn.rollback()
                 flash("Error: La fuente ya existe.", "error")
-                
-        elif accion == 'actualizar_registro':
-            tabla = request.form.get('tabla')
-            id_registro = request.form.get('id_registro')
-            columna = request.form.get('columna')
-            nuevo_valor = request.form.get('nuevo_valor')
-            
-            # Validación simple para evitar errores y proteger los nombres de tabla permitidos
-            tablas_permitidas = ['materiales', 'movimientos', 'proveedores', 'fuentes', 'grupos']
-            if tabla in tablas_permitidas:
-                try:
-                    # Nombres de tablas/columnas van en f-string, los datos en el cursor
-                    cursor.execute(f'''
-                        UPDATE {tabla}
-                        SET {columna} = %s
-                        WHERE id = %s
-                    ''', (nuevo_valor, id_registro))
-                    flash(f"Éxito: Registro con ID {id_registro} de la tabla '{tabla}' actualizado correctamente (Columna: {columna}).", "success")
-                except Exception as e:
-                    conn.rollback()
-                    flash(f"Error al actualizar: {e}", "error")
-            else:
-                flash("Error: Tabla no permitida.", "error")
 
         elif accion == 'agregar_ip':
             cursor.execute('INSERT INTO ips_autorizadas (ip_direccion, descripcion) VALUES (%s, %s)', 
@@ -1024,9 +1001,12 @@ def admin():
     cursor.execute('SELECT id, nombre FROM materiales ORDER BY nombre ASC')
     materiales = cursor.fetchall()
 
+    cursor.execute('SELECT * FROM ips_autorizadas ORDER BY id DESC')
+    ips = cursor.fetchall()
+
     cursor.close()
     conn.close()
-    return render_template('admin.html', grupos=grupos, proveedores=proveedores, fuentes=fuentes, materiales=materiales)
+    return render_template('admin.html', grupos=grupos, proveedores=proveedores, fuentes=fuentes, materiales=materiales, ips=ips)
 
 
 # --- GESTIÓN DE MOVIMIENTOS (ENTRADAS/SALIDAS) DESDE EL ADMIN ---
@@ -1187,6 +1167,17 @@ def eliminar_fuente(id):
     cursor.close()
     conn.close()
     flash("Éxito: Fuente eliminada correctamente.", "success")
+    return redirect(url_for('admin'))
+
+@app.route('/eliminar_ip/<int:id>', methods=['POST'])
+def eliminar_ip(id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM ips_autorizadas WHERE id = %s', (id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    flash("Éxito: IP eliminada de la lista blanca.", "success")
     return redirect(url_for('admin'))
 
 @app.route('/consultor')
