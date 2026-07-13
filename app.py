@@ -759,18 +759,30 @@ def exportar_inventario():
 
 @app.route('/exportar_kardex')
 def exportar_kardex():
-    mes_filtro = request.args.get('mes', datetime.now().strftime('%Y-%m'))
+    mes_filtro = request.args.get('mes')
+    if not mes_filtro:
+        mes_filtro = datetime.now().strftime('%Y-%m')
     
-    # 1. Configurar nombres y libro
-    año, mes_num = mes_filtro.split('-')
-    mes_nombre = calendar.month_name[int(mes_num)]
+    # 1. Configurar nombres y libro con manejo de errores
+    meses_es = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
     
+    if mes_filtro == 'todos':
+        nombre_archivo = "Kardex General Completo.xlsx"
+    else:
+        try:
+            año, mes_num = mes_filtro.split('-')
+            mes_nombre = meses_es[int(mes_num)]
+            nombre_archivo = f"Kardex General Mes de {mes_nombre} de {año}.xlsx"
+        except:
+            nombre_archivo = "Kardex_General.xlsx"
+            
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     cursor.execute('SELECT * FROM materiales ORDER BY nombre ASC')
     materiales = cursor.fetchall()
     
     wb = openpyxl.Workbook()
+    # ... (El resto de tu código de estilos y generación de Excel sigue exactamente igual hacia abajo)
     
     # --- ESTILOS ---
     fill_verde = PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid")
@@ -804,21 +816,42 @@ def exportar_kardex():
 
     # --- PROCESAMIENTO ---
     for mat in materiales:
-        # Calcular stock y costo actual (lógica igual a la del inventario)
+        # Calcular stock y costo actual
         cursor.execute('''SELECT SUM(CASE WHEN tipo='entrada' THEN cantidad ELSE -cantidad END) as mov_cant,
                           AVG(precio_unitario) as costo_prom
                           FROM movimientos WHERE material_id = %s''', (mat['id'],))
         res = cursor.fetchone()
-        stock_actual = mat['cantidad_inicial'] + (res['mov_cant'] or 0)
-        costo_prom = res['costo_prom'] or mat['precio_unitario']
+        
+        # SOLUCIÓN: Convertir todo explícitamente a float para evitar el choque de tipos
+        cant_inicial = float(mat['cantidad_inicial'])
+        precio_uni = float(mat['precio_unitario'])
+        mov_cant = float(res['mov_cant'] or 0)
+        costo_prom = float(res['costo_prom'] or mat['precio_unitario'])
+        
+        stock_actual = cant_inicial + mov_cant
         
         # Llenar Hoja Inventario
-        row_inv = [mat['nombre'], mat['descripcion'], mat['tipo_material'], stock_actual, round(float(costo_prom), 2), round(stock_actual * float(costo_prom), 2)]
+        row_inv = [
+            mat['nombre'], 
+            mat['descripcion'], 
+            mat['tipo_material'], 
+            stock_actual, 
+            round(costo_prom, 2), 
+            round(stock_actual * costo_prom, 2)
+        ]
         ws_inv.append(row_inv)
         
-        # Llenar Hoja Kardex (Resumen por producto)
-        # Aquí puedes agregar la lógica de movimiento mensual que ya tenías...
-        row_kardex = [mat['nombre'], mat['descripcion'], mat['tipo_material'], mat['cantidad_inicial'], round(mat['cantidad_inicial']*mat['precio_unitario'], 2), 0,0,0,0, stock_actual, round(stock_actual*float(costo_prom), 2)]
+        # Llenar Hoja Kardex
+        row_kardex = [
+            mat['nombre'], 
+            mat['descripcion'], 
+            mat['tipo_material'], 
+            cant_inicial, 
+            round(cant_inicial * precio_uni, 2), 
+            0, 0, 0, 0, 
+            stock_actual, 
+            round(stock_actual * costo_prom, 2)
+        ]
         ws_kardex.append(row_kardex)
 
     # --- APLICAR COLORES A COLUMNAS DE LA HOJA KARDEX ---
