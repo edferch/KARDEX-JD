@@ -467,14 +467,7 @@ def agregar_entrada():
 
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        
-        # 1. Validación de unicidad para el correlativo/documento
-        cursor.execute('SELECT id FROM movimientos WHERE numero_documento = %s', (numero_documento,))
-        if cursor.fetchone():
-            cursor.close()
-            conn.close()
-            flash(f"Error: El correlativo '{numero_documento}' ya existe. Debe ser único.", "error")
-            return redirect(url_for('index'))
+    
 
         # 2. Lógica según el tipo de documento
         if tipo_documento == 'devolucion':
@@ -520,7 +513,7 @@ def agregar_salida():
         cantidad_a_sacar = float(request.form['cantidad'])
         fecha = request.form.get('fecha')
         # Ahora el documento es fijo "Orden"
-        documento = "Orden" 
+        documento = request.form.get('documento', 'Orden')
         # El número de documento es el correlativo único
         numero_documento = request.form.get('numero_documento', '').strip()
         departamento = request.form.get('departamento', '')
@@ -535,14 +528,7 @@ def agregar_salida():
 
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        
-        # 1. Validar que el correlativo no se repita
-        cursor.execute('SELECT id FROM movimientos WHERE numero_documento = %s', (numero_documento,))
-        if cursor.fetchone():
-            cursor.close()
-            conn.close()
-            flash(f"Error: El correlativo '{numero_documento}' ya existe. Debe ser único.", "error")
-            return redirect(url_for('index'))
+    
 
         # 2. Validar existencias actuales
         cursor.execute('SELECT * FROM materiales WHERE id = %s', (material_id,))

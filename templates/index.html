@@ -272,19 +272,25 @@
                 <label>Seleccionar Material:</label>
                 <input type="text" id="busquedaMaterialSalida" list="listaMateriales" placeholder="Escriba para buscar..." autocomplete="off" style="width: 100%; padding: 12px 16px; border: 1px solid #cbd5e1; border-radius: 8px;" required>
                 <input type="hidden" name="material_id" id="hiddenMaterial_salida" required>
-                <div style="display: flex; justify-content: space-between; align-items: center;">
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top:10px;">
                     <label style="margin: 0;">Fecha de Registro (Automática):</label>
                     <span onclick="desbloquearFecha('fechaSalida')" style="font-size: 11px; color: #3b82f6; cursor: pointer; font-weight: 600; padding: 4px 8px; background-color: #eff6ff; border-radius: 6px; border: 1px solid #bfdbfe; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='#dbeafe'" onmouseout="this.style.backgroundColor='#eff6ff'" title="Desbloquear (Solo Admin)">Cambiar fecha</span>
                 </div>
                 <input type="date" name="fecha" id="fechaSalida" required readonly style="background-color: #f1f5f9; cursor: not-allowed; color: #64748b; font-weight: 600;">
-                <label>Orden:</label>
-                <input type="text" name="documento" value="Orden" readonly style="background-color: #f1f5f9; cursor: not-allowed;">
+
+                <label>Orden (Documento):</label>
+                <input type="text" name="documento"  required style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;">
+                
                 <label>Correlativo:</label>
-                <input type="text" name="numero_documento" required>
+                <input type="text" name="numero_documento" required style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;">
+
                 <label>Departamento:</label>
                 <input type="text" name="departamento" autocomplete="off">
+                
                 <label>Solicitante:</label>
                 <input type="text" name="solicitante" autocomplete="off">
+                
                 <label>Cantidad a extraer (Unidades):</label>
                 <input type="number" step="any" name="cantidad" required>
             </div>
