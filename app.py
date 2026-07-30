@@ -454,13 +454,17 @@ def agregar_entrada():
     if request.method == 'POST':
         material_id = int(request.form['material_id'])
         cantidad = float(request.form['cantidad'])
-        precio = float(request.form['precio'])
+        
+        # Asigna 0.0 temporalmente si el precio viene vacío
+        precio_str = request.form.get('precio', '').strip()
+        precio = float(precio_str) if precio_str else 0.0
+        
         fecha = request.form.get('fecha')
         fecha_factura = request.form.get('fecha_factura', '')
         
-        # Nuevos campos solicitados
-        tipo_documento = request.form.get('tipo_documento') # 'factura' o 'devolucion'
-        numero_documento = request.form.get('numero_documento', '').strip() # El correlativo/orden
+        tipo_documento = request.form.get('tipo_documento') 
+        # En tu form, este input captura lo que el usuario escribe (ya sea Factura u Orden)
+        numero_documento = request.form.get('numero_documento', '').strip() 
 
         if not fecha:
             fecha = datetime.now().strftime('%Y-%m-%d')
@@ -468,43 +472,69 @@ def agregar_entrada():
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     
-
-        # 2. Lógica según el tipo de documento
         if tipo_documento == 'devolucion':
-            # Busca la salida específica usando el numero_documento como "Orden"
+            # Buscamos la salida donde el 'documento' sea igual a la Orden ingresada
             cursor.execute('''
                 SELECT precio_unitario FROM movimientos
-                WHERE material_id = %s AND tipo = 'salida' AND numero_documento = %s
+                WHERE material_id = %s AND tipo = 'salida' AND documento = %s
+                ORDER BY id DESC
                 LIMIT 1
             ''', (material_id, numero_documento))
             salida = cursor.fetchone()
             
             if salida:
-                precio = salida['precio_unitario']
+                precio = salida['precio_unitario'] # Reemplazamos por el costo exacto
             else:
                 cursor.close()
                 conn.close()
-                flash("Error: No se encontró una salida asociada a esa Orden (Correlativo).", "error")
+                flash(f"Error: No se encontró una salida asociada a la Orden '{numero_documento}'.", "error")
                 return redirect(url_for('index'))
             
-            documento = "Devolución"
+            documento_bd = "Devolución"
         else:
-            documento = "Factura"
+            documento_bd = "Factura"
 
-        # 3. Registrar la entrada
+        # Registrar la entrada
         cursor.execute('''
             INSERT INTO movimientos (material_id, tipo, cantidad, precio_unitario, fecha, documento, numero_documento, fecha_factura)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        ''', (material_id, 'entrada', cantidad, precio, fecha, documento, numero_documento, fecha_factura))
+        ''', (material_id, 'entrada', cantidad, precio, fecha, documento_bd, numero_documento, fecha_factura))
         
         conn.commit()
         cursor.close()
         conn.close()
         
-        flash(f"Éxito: {documento} registrada correctamente.", "success")
+        flash(f"Éxito: {documento_bd} registrada correctamente.", "success")
         if request.form.get('origen') == 'vista_entradas':
             return redirect(url_for('entradas'))
         return redirect(url_for('index'))
+
+# --- NUEVA RUTA PARA QUE EL MODAL SEA INTELIGENTE ---
+@app.route('/api/precio_devolucion')
+def api_precio_devolucion():
+    material_id = request.args.get('material_id', type=int)
+    orden = request.args.get('orden', '')
+
+    if not material_id or not orden:
+        return jsonify({'success': False, 'error': 'Faltan datos'})
+
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    # Busca el precio original basado en la orden (documento)
+    cursor.execute('''
+        SELECT precio_unitario FROM movimientos
+        WHERE material_id = %s AND tipo = 'salida' AND documento = %s
+        ORDER BY id DESC
+        LIMIT 1
+    ''', (material_id, orden))
+    salida = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if salida:
+        return jsonify({'success': True, 'precio': salida['precio_unitario']})
+    else:
+        return jsonify({'success': False, 'error': 'No encontrada'})
 
 @app.route('/agregar_salida', methods=['POST'])
 def agregar_salida():

@@ -438,22 +438,111 @@
             }
         }
 
-        function verificarDevolucion() {
-            const docInput = document.getElementById('tipoDocEntrada').value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        // --- MOTOR DEL MODAL INTELIGENTE ---
+        function actualizarLabelsEntrada() {
+            const tipo = document.getElementById('tipoDocEntrada').value;
+            const lblDoc = document.getElementById('lblNumeroDocumento');
+            const inputDoc = document.getElementById('inputNumeroDocumento');
             const precioInput = document.getElementById('precioEntrada');
             const lblPrecio = document.getElementById('lblPrecioEntrada');
             
-            if (docInput.includes('devolucion')) {
+            if (tipo === 'devolucion') {
+                lblDoc.innerText = 'Número de Orden (de donde salió):';
+                inputDoc.placeholder = 'Ej: ORD-001';
+                
                 precioInput.value = '0';
                 precioInput.setAttribute('readonly', 'true');
                 precioInput.style.backgroundColor = '#f1f5f9';
                 lblPrecio.innerText = 'Costo (Automático por devolución):';
+                
+                // Intenta buscar si ya hay datos escritos
+                buscarPrecioDevolucion();
             } else {
+                lblDoc.innerText = 'Número de Documento (Factura):';
+                inputDoc.placeholder = 'Ej: FAC-123';
+                
                 precioInput.removeAttribute('readonly');
                 precioInput.style.backgroundColor = '#ffffff';
                 lblPrecio.innerText = 'Costo de compra (Q):';
+                lblPrecio.style.color = '#1e293b';
+                precioInput.value = '';
             }
         }
+
+        // Función que va a la base de datos en tiempo real
+        function buscarPrecioDevolucion() {
+            const tipo = document.getElementById('tipoDocEntrada').value;
+            const materialId = document.getElementById('hiddenMaterial_entrada').value;
+            const orden = document.getElementById('inputNumeroDocumento').value.trim();
+            const precioInput = document.getElementById('precioEntrada');
+            const lblPrecio = document.getElementById('lblPrecioEntrada');
+
+            if (tipo === 'devolucion' && materialId && orden) {
+                lblPrecio.innerText = 'Buscando costo... ⏳';
+                lblPrecio.style.color = '#3b82f6';
+
+                fetch(`/api/precio_devolucion?material_id=${materialId}&orden=${encodeURIComponent(orden)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            precioInput.value = data.precio;
+                            lblPrecio.innerText = 'Costo Automático (Q): ✅ Encontrado';
+                            lblPrecio.style.color = '#10b981';
+                        } else {
+                            precioInput.value = '0';
+                            lblPrecio.innerText = 'Costo: ❌ Orden no encontrada';
+                            lblPrecio.style.color = '#ef4444';
+                        }
+                    })
+                    .catch(error => {
+                        precioInput.value = '0';
+                        lblPrecio.innerText = 'Error de conexión';
+                        lblPrecio.style.color = '#ef4444';
+                    });
+            }
+        }
+
+        // Agregar los detectores para que busque automáticamente cuando escribas la orden
+        document.getElementById('inputNumeroDocumento').addEventListener('input', buscarPrecioDevolucion);
+
+        // --- LÓGICA DE BÚSQUEDA Y SELECCIÓN DE MATERIALES ---
+        // (Reemplaza la que ya tienes por esta que activa la búsqueda automática de precio)
+        function inicializarBusquedaMaterial(inputId, hiddenId) {
+            const input = document.getElementById(inputId);
+            const hidden = document.getElementById(hiddenId);
+            const datalist = document.getElementById('listaMateriales');
+            
+            if(!input || !hidden || !datalist) return;
+
+            input.setCustomValidity("Debe seleccionar un material de la lista.");
+
+            input.addEventListener('input', function() {
+                let foundId = "";
+                const options = datalist.options;
+                
+                for(let i=0; i<options.length; i++) {
+                    if(options[i].value === input.value) {
+                        foundId = options[i].getAttribute('data-id');
+                        break;
+                    }
+                }
+                
+                hidden.value = foundId;
+                
+                if (foundId === "") {
+                    input.setCustomValidity("Debe seleccionar un material válido de la lista.");
+                } else {
+                    input.setCustomValidity(""); 
+                    // Si encontró el material y estamos en el modal de entrada, buscar precio
+                    if (hiddenId === 'hiddenMaterial_entrada') {
+                        buscarPrecioDevolucion();
+                    }
+                }
+            });
+        }
+        
+        inicializarBusquedaMaterial('busquedaMaterialEntrada', 'hiddenMaterial_entrada');
+        inicializarBusquedaMaterial('busquedaMaterialSalida', 'hiddenMaterial_salida');
 
         // --- LÓGICA DE VÍNCULOS ---
         let contextMenuVinculoData = null;
@@ -612,18 +701,6 @@
             }
         });
 
-        function actualizarLabelsEntrada() {
-            const tipo = document.getElementById('tipoDocEntrada').value;
-            const lbl = document.getElementById('lblNumeroDocumento');
-            const input = document.getElementById('inputNumeroDocumento');
-            
-            if (tipo === 'devolucion') {
-                lbl.innerText = 'Número de Orden (de donde salió):';
-                input.placeholder = 'Ej: ORD-001';
-            } else {
-                lbl.innerText = 'Número de Documento (Factura):';
-                input.placeholder = 'Ej: FAC-123';
-            }
-        }
+        
     </script>
 {% endblock %}
