@@ -53,82 +53,64 @@ def index():
     else:
         return redirect(url_for('consultor'))
 
-# 3. La función que contiene toda tu lógica original del index
-def renderizar_kardex_completo():
-    conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    
-    # Obtener el mes desde la URL
-    mes_filtro = request.args.get('mes')
-    if not mes_filtro:
-        mes_filtro = datetime.now().strftime('%Y-%m')
-        
-    cursor.execute('SELECT * FROM materiales ORDER BY nombre ASC')
-    materiales_db = cursor.fetchall()
+
+def preparar_datos_kardex(materiales_db, movimientos_por_material, mes_filtro):
     materiales_kardex = []
-    
     alertas_rojas = []
     alertas_amarillas = []
-    
+
     totales = {
-        'ini_cant': 0, 'ini_total': 0,
-        'ing_cant': 0, 'ing_total': 0,
-        'sal_cant': 0, 'sal_total': 0,
-        'fin_cant': 0, 'fin_total': 0
+        'ini_cant': 0.0, 'ini_total': 0.0,
+        'ing_cant': 0.0, 'ing_total': 0.0,
+        'sal_cant': 0.0, 'sal_total': 0.0,
+        'fin_cant': 0.0, 'fin_total': 0.0
     }
 
-    hoy = datetime.now()
-    try:
-        _, ultimo_dia = calendar.monthrange(hoy.year, hoy.month)
-        es_fin_de_mes = (ultimo_dia - hoy.day) <= 3
-    except Exception:
-        es_fin_de_mes = False
-        
     for mat in materiales_db:
         mat_id = mat['id']
-        cant_saldo = mat['cantidad_inicial']
-        precio_promedio = mat['precio_unitario']
+        cant_saldo = float(mat['cantidad_inicial'])
+        precio_promedio = float(mat['precio_unitario'])
         total_saldo = cant_saldo * precio_promedio
-        
-        cursor.execute('SELECT * FROM movimientos WHERE material_id = %s ORDER BY fecha ASC, id ASC', (mat_id,))
-        movimientos = cursor.fetchall()
-        
+        movimientos = movimientos_por_material.get(mat_id, [])
+
         if mes_filtro != 'todos':
             movs_anteriores = [m for m in movimientos if str(m['fecha']) < f"{mes_filtro}-01"]
             movs_actuales = [m for m in movimientos if str(m['fecha']).startswith(mes_filtro)]
         else:
             movs_anteriores = []
             movs_actuales = movimientos
-            
+
         for mov in movs_anteriores:
             if mov['tipo'] == 'entrada':
-                costo_movimiento = mov['cantidad'] * mov['precio_unitario']
-                cant_saldo += mov['cantidad']
+                costo_movimiento = float(mov['cantidad']) * float(mov['precio_unitario'])
+                cant_saldo += float(mov['cantidad'])
                 total_saldo += costo_movimiento
-                if cant_saldo > 0: precio_promedio = total_saldo / cant_saldo
+                if cant_saldo > 0:
+                    precio_promedio = total_saldo / cant_saldo
             elif mov['tipo'] == 'salida':
-                costo_movimiento = mov['cantidad'] * precio_promedio
-                cant_saldo -= mov['cantidad']
+                costo_movimiento = float(mov['cantidad']) * precio_promedio
+                cant_saldo -= float(mov['cantidad'])
                 total_saldo -= costo_movimiento
-        
+
         ini_cant, ini_costo, ini_total = cant_saldo, precio_promedio, total_saldo
-        
-        acum_ingreso_cant, acum_ingreso_total = 0, 0
-        acum_salida_cant, acum_salida_total = 0, 0
-        
+
+        acum_ingreso_cant, acum_ingreso_total = 0.0, 0.0
+        acum_salida_cant, acum_salida_total = 0.0, 0.0
+
         for mov in movs_actuales:
             if mov['tipo'] == 'entrada':
-                costo_movimiento = mov['cantidad'] * mov['precio_unitario']
-                cant_saldo += mov['cantidad']
+                costo_movimiento = float(mov['cantidad']) * float(mov['precio_unitario'])
+                cant_saldo += float(mov['cantidad'])
                 total_saldo += costo_movimiento
-                acum_ingreso_cant += mov['cantidad']
+                acum_ingreso_cant += float(mov['cantidad'])
                 acum_ingreso_total += costo_movimiento
-                if cant_saldo > 0: precio_promedio = total_saldo / cant_saldo
+                if cant_saldo > 0:
+                    precio_promedio = total_saldo / cant_saldo
             elif mov['tipo'] == 'salida':
-                costo_movimiento = mov['cantidad'] * precio_promedio
-                cant_saldo -= mov['cantidad']
+                costo_movimiento = float(mov['cantidad']) * precio_promedio
+                cant_saldo -= float(mov['cantidad'])
                 total_saldo -= costo_movimiento
-                acum_salida_cant += mov['cantidad']
+                acum_salida_cant += float(mov['cantidad'])
                 acum_salida_total += costo_movimiento
 
         avg_ingreso = acum_ingreso_total / acum_ingreso_cant if acum_ingreso_cant > 0 else 0
@@ -152,11 +134,48 @@ def renderizar_kardex_completo():
             'sal_cant': acum_salida_cant, 'sal_costo': avg_salida, 'sal_total': acum_salida_total,
             'fin_cant': cant_saldo, 'fin_costo': precio_promedio, 'fin_total': total_saldo
         })
+
+        totales['ini_cant'] += ini_cant
+        totales['ini_total'] += ini_total
+        totales['ing_cant'] += acum_ingreso_cant
+        totales['ing_total'] += acum_ingreso_total
+        totales['sal_cant'] += acum_salida_cant
+        totales['sal_total'] += acum_salida_total
+        totales['fin_cant'] += cant_saldo
+        totales['fin_total'] += total_saldo
+
+    return materiales_kardex, alertas_rojas, alertas_amarillas, totales
+
+# 3. La función que contiene toda tu lógica original del index
+def renderizar_kardex_completo():
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    
+    # Obtener el mes desde la URL
+    mes_filtro = request.args.get('mes')
+    if not mes_filtro:
+        mes_filtro = datetime.now().strftime('%Y-%m')
         
-        totales['ini_cant'] += ini_cant; totales['ini_total'] += ini_total
-        totales['ing_cant'] += acum_ingreso_cant; totales['ing_total'] += acum_ingreso_total
-        totales['sal_cant'] += acum_salida_cant; totales['sal_total'] += acum_salida_total
-        totales['fin_cant'] += cant_saldo; totales['fin_total'] += total_saldo
+    cursor.execute('SELECT * FROM materiales ORDER BY nombre ASC')
+    materiales_db = cursor.fetchall()
+
+    movimientos_por_material = {}
+    for mat in materiales_db:
+        cursor.execute('SELECT * FROM movimientos WHERE material_id = %s ORDER BY fecha ASC, id ASC', (mat['id'],))
+        movimientos_por_material[mat['id']] = cursor.fetchall()
+
+    materiales_kardex, alertas_rojas, alertas_amarillas, totales = preparar_datos_kardex(
+        materiales_db,
+        movimientos_por_material,
+        mes_filtro
+    )
+
+    hoy = datetime.now()
+    try:
+        _, ultimo_dia = calendar.monthrange(hoy.year, hoy.month)
+        es_fin_de_mes = (ultimo_dia - hoy.day) <= 3
+    except Exception:
+        es_fin_de_mes = False
 
     cursor.execute('SELECT * FROM grupos ORDER BY nombre ASC')
     grupos = cursor.fetchall()
@@ -792,113 +811,123 @@ def exportar_kardex():
     mes_filtro = request.args.get('mes')
     if not mes_filtro:
         mes_filtro = datetime.now().strftime('%Y-%m')
-    
-    # 1. Configurar nombres y libro con manejo de errores
+
     meses_es = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-    
+
     if mes_filtro == 'todos':
         nombre_archivo = "Kardex General Completo.xlsx"
     else:
         try:
-            año, mes_num = mes_filtro.split('-')
+            anio, mes_num = mes_filtro.split('-')
             mes_nombre = meses_es[int(mes_num)]
-            nombre_archivo = f"Kardex General Mes de {mes_nombre} de {año}.xlsx"
-        except:
+            nombre_archivo = f"Kardex General Mes de {mes_nombre} de {anio}.xlsx"
+        except Exception:
             nombre_archivo = "Kardex_General.xlsx"
-            
+
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     cursor.execute('SELECT * FROM materiales ORDER BY nombre ASC')
     materiales = cursor.fetchall()
-    
-    wb = openpyxl.Workbook()
-    # ... (El resto de tu código de estilos y generación de Excel sigue exactamente igual hacia abajo)
-    
-    # --- ESTILOS ---
-    fill_verde = PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid")
-    fill_naranja = PatternFill(start_color="FFEDD5", end_color="FFEDD5", fill_type="solid")
-    fill_azul = PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")
-    fill_gris = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
-    bold_font = Font(bold=True)
-    border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
 
-    # --- HOJA 1: KARDEX DETALLADO ---
-    ws_kardex = wb.active
-    ws_kardex.title = "Kardex Detallado"
-    
-    # Encabezados con colores
-    headers = ['Nombre', 'Descripción', 'Grupo', 'Inicial Cant.', 'Inicial Total', 'Entradas Cant.', 'Entradas Total', 'Salidas Cant.', 'Salidas Total', 'Actual Cant.', 'Actual Total']
-    ws_kardex.append(headers)
-    
-    for col_num, cell in enumerate(ws_kardex[1], 1):
-        cell.fill = fill_gris
-        cell.font = bold_font
-        cell.border = border
-
-    # --- HOJA 2: INVENTARIO ACTUAL ---
-    ws_inv = wb.create_sheet(title="Inventario Actual")
-    headers_inv = ['Nombre', 'Descripción', 'Grupo', 'Stock Actual', 'Costo Prom. Actual', 'Valor Total Actual']
-    ws_inv.append(headers_inv)
-    for cell in ws_inv[1]:
-        cell.fill = fill_gris
-        cell.font = bold_font
-        cell.border = border
-
-    # --- PROCESAMIENTO ---
+    movimientos_por_material = {}
     for mat in materiales:
-        # Calcular stock y costo actual
-        cursor.execute('''SELECT SUM(CASE WHEN tipo='entrada' THEN cantidad ELSE -cantidad END) as mov_cant,
-                          AVG(precio_unitario) as costo_prom
-                          FROM movimientos WHERE material_id = %s''', (mat['id'],))
-        res = cursor.fetchone()
-        
-        # SOLUCIÓN: Convertir todo explícitamente a float para evitar el choque de tipos
-        cant_inicial = float(mat['cantidad_inicial'])
-        precio_uni = float(mat['precio_unitario'])
-        mov_cant = float(res['mov_cant'] or 0)
-        costo_prom = float(res['costo_prom'] or mat['precio_unitario'])
-        
-        stock_actual = cant_inicial + mov_cant
-        
-        # Llenar Hoja Inventario
-        row_inv = [
-            mat['nombre'], 
-            mat['descripcion'], 
-            mat['tipo_material'], 
-            stock_actual, 
-            round(costo_prom, 2), 
-            round(stock_actual * costo_prom, 2)
-        ]
-        ws_inv.append(row_inv)
-        
-        # Llenar Hoja Kardex
-        row_kardex = [
-            mat['nombre'], 
-            mat['descripcion'], 
-            mat['tipo_material'], 
-            cant_inicial, 
-            round(cant_inicial * precio_uni, 2), 
-            0, 0, 0, 0, 
-            stock_actual, 
-            round(stock_actual * costo_prom, 2)
-        ]
-        ws_kardex.append(row_kardex)
+        cursor.execute('SELECT * FROM movimientos WHERE material_id = %s ORDER BY fecha ASC, id ASC', (mat['id'],))
+        movimientos_por_material[mat['id']] = cursor.fetchall()
 
-    # --- APLICAR COLORES A COLUMNAS DE LA HOJA KARDEX ---
-    for row in ws_kardex.iter_rows(min_row=2):
-        for col_num, cell in enumerate(row, 1):
-            cell.border = border
-            if 6 <= col_num <= 7: cell.fill = fill_verde # Entradas
-            if 8 <= col_num <= 9: cell.fill = fill_naranja # Salidas
-            if 10 <= col_num <= 11: cell.fill = fill_azul # Actuales
+    materiales_kardex, _, _, _ = preparar_datos_kardex(materiales, movimientos_por_material, mes_filtro)
 
     cursor.close()
     conn.close()
-    
+
+    wb = openpyxl.Workbook()
+    ws_kardex = wb.active
+    ws_kardex.title = "Kardex Detallado"
+
+    fill_gris = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+    fill_amarillo = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
+    fill_verde = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
+    fill_azul = PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")
+    fill_naranja = PatternFill(start_color="FFEDD5", end_color="FFEDD5", fill_type="solid")
+    bold_font = Font(bold=True)
+    border = Border(left=Side(style='thin', color='CBD5E1'), right=Side(style='thin', color='CBD5E1'), top=Side(style='thin', color='CBD5E1'), bottom=Side(style='thin', color='CBD5E1'))
+    alignment_center = Alignment(horizontal='center', vertical='center')
+
+    headers = [
+        'No.', 'Nombre', 'Grupo',
+        'Inicial Cant.', 'Inicial Costo', 'Inicial Total',
+        'Entradas Cant.', 'Entradas Costo', 'Entradas Total',
+        'Salidas Cant.', 'Salidas Costo', 'Salidas Total',
+        'Actual Cant.', 'Actual Costo', 'Actual Total'
+    ]
+    ws_kardex.append(headers)
+
+    for cell in ws_kardex[1]:
+        cell.fill = fill_gris
+        cell.font = bold_font
+        cell.border = border
+        cell.alignment = alignment_center
+
+    for idx, mat in enumerate(materiales_kardex, 1):
+        row = [
+            idx,
+            mat['nombre'],
+            mat['tipo_material'],
+            mat['ini_cant'],
+            mat['ini_costo'],
+            mat['ini_total'],
+            mat['ing_cant'],
+            mat['ing_costo'],
+            mat['ing_total'],
+            mat['sal_cant'],
+            mat['sal_costo'],
+            mat['sal_total'],
+            mat['fin_cant'],
+            mat['fin_costo'],
+            mat['fin_total']
+        ]
+        ws_kardex.append(row)
+
+    for row in ws_kardex.iter_rows(min_row=2, max_row=ws_kardex.max_row):
+        for col_num, cell in enumerate(row, 1):
+            cell.border = border
+            if col_num in {4, 5, 6}:
+                cell.fill = fill_amarillo
+            elif col_num in {7, 8, 9}:
+                cell.fill = fill_verde
+            elif col_num in {10, 11, 12}:
+                cell.fill = fill_azul
+            elif col_num in {13, 14, 15}:
+                cell.fill = fill_naranja
+
+            if col_num == 1:
+                cell.alignment = alignment_center
+            elif col_num in {4, 7, 10, 13}:
+                cell.number_format = '#,##0'
+            else:
+                cell.number_format = '#,##0.00'
+
+    ws_kardex.freeze_panes = 'A2'
+    ws_kardex.auto_filter.ref = ws_kardex.dimensions
+
+    for col in ws_kardex.columns:
+        max_length = 0
+        column_letter = col[0].column_letter
+        for cell in col:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except Exception:
+                pass
+        ws_kardex.column_dimensions[column_letter].width = min(max_length + 2, 40)
+
     output = BytesIO()
     wb.save(output)
-    return Response(output.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
-                    headers={'Content-Disposition': f'attachment; filename="Kardex General Mes de {mes_nombre} de {año}.xlsx"'})
+
+    return Response(
+        output.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument/spreadsheetml.sheet',
+        headers={'Content-Disposition': f'attachment; filename="{nombre_archivo}"'}
+    )
 @app.route('/cargar_excel', methods=['GET', 'POST'])
 def cargar_excel():
     if request.method == 'POST':
