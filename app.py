@@ -1,6 +1,4 @@
-import psycopg2
-import psycopg2.extras
-from psycopg2 import IntegrityError
+import sqlite3
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, session
 from datetime import datetime
 from functools import wraps
@@ -24,14 +22,49 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
+DB_PATH = 'kardex.db'
+
 def get_db_connection():
-    conn = psycopg2.connect(
-        dbname="kardex_jd",
-        user="postgres",
-        password="fc17181931",
-        host="localhost"
-    )
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA foreign_keys = ON')
     return conn
+
+def init_db():
+    conn = get_db_connection()
+    conn.executescript('''
+        CREATE TABLE IF NOT EXISTS grupos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT NOT NULL UNIQUE
+        );
+        CREATE TABLE IF NOT EXISTS fuentes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT NOT NULL UNIQUE
+        );
+        CREATE TABLE IF NOT EXISTS proveedores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, nit TEXT, nombre TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS materiales (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT NOT NULL, codigo TEXT, descripcion TEXT,
+            tipo_material TEXT, numero_metrico TEXT, origen TEXT, empresa TEXT,
+            presentacion TEXT, unidad TEXT, cantidad_inicial NUMERIC DEFAULT 0,
+            precio_unitario NUMERIC DEFAULT 0.0, fuente TEXT, drive_link TEXT, costo_link TEXT
+        );
+        CREATE TABLE IF NOT EXISTS movimientos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, material_id INTEGER REFERENCES materiales(id),
+            tipo TEXT, cantidad NUMERIC, precio_unitario NUMERIC, fecha DATE,
+            documento TEXT, numero_documento TEXT, fecha_factura DATE,
+            departamento TEXT, solicitante TEXT
+        );
+        CREATE TABLE IF NOT EXISTS ips_autorizadas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, ip_direccion TEXT NOT NULL, descripcion TEXT
+        );
+    ''')
+
+    columnas_materiales = [fila['name'] for fila in conn.execute('PRAGMA table_info(materiales)').fetchall()]
+    if 'codigo' not in columnas_materiales:
+        conn.execute('ALTER TABLE materiales ADD COLUMN codigo TEXT')
+
+    conn.commit()
+    conn.close()
 
 
 # 1. Función de validación de IP (Colócala antes de las rutas)
@@ -39,7 +72,7 @@ def es_ip_autorizada():
     ip_cliente = request.remote_addr
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT 1 FROM ips_autorizadas WHERE ip_direccion = %s', (ip_cliente,))
+    cursor.execute('SELECT 1 FROM ips_autorizadas WHERE ip_direccion = ?', (ip_cliente,))
     autorizada = cursor.fetchone() is not None
     cursor.close()
     conn.close()
@@ -124,6 +157,7 @@ def preparar_datos_kardex(materiales_db, movimientos_por_material, mes_filtro):
         materiales_kardex.append({
             'id': mat['id'],
             'nombre': mat['nombre'],
+            'codigo': dict(mat).get('codigo', ''),
             'descripcion': dict(mat).get('descripcion', ''),
             'drive_link': mat['drive_link'],
             'costo_link': dict(mat).get('costo_link', ''),
@@ -149,7 +183,7 @@ def preparar_datos_kardex(materiales_db, movimientos_por_material, mes_filtro):
 # 3. La función que contiene toda tu lógica original del index
 def renderizar_kardex_completo():
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cursor = conn.cursor()
     
     # Obtener el mes desde la URL
     mes_filtro = request.args.get('mes')
@@ -161,7 +195,7 @@ def renderizar_kardex_completo():
 
     movimientos_por_material = {}
     for mat in materiales_db:
-        cursor.execute('SELECT * FROM movimientos WHERE material_id = %s ORDER BY fecha ASC, id ASC', (mat['id'],))
+        cursor.execute('SELECT * FROM movimientos WHERE material_id = ? ORDER BY fecha ASC, id ASC', (mat['id'],))
         movimientos_por_material[mat['id']] = cursor.fetchall()
 
     materiales_kardex, alertas_rojas, alertas_amarillas, totales = preparar_datos_kardex(
@@ -186,10 +220,42 @@ def renderizar_kardex_completo():
                            alertas_rojas=alertas_rojas, alertas_amarillas=alertas_amarillas, 
                            es_fin_de_mes=es_fin_de_mes, totales=totales)
 
+def obtener_materiales_con_stock(cursor):
+    """Calcula stock actual, costo promedio actual y fecha de última entrada por material."""
+    cursor.execute('SELECT * FROM materiales ORDER BY nombre ASC')
+    materiales_raw = cursor.fetchall()
+
+    materiales = []
+    for mat in materiales_raw:
+        m = dict(mat)
+
+        cursor.execute('''
+            SELECT
+                SUM(CASE WHEN tipo='entrada' THEN cantidad ELSE -cantidad END) as mov_cant,
+                SUM(CASE WHEN tipo='entrada' THEN (cantidad * precio_unitario) ELSE 0 END) as total_entradas,
+                SUM(CASE WHEN tipo='entrada' THEN cantidad ELSE 0 END) as cant_entradas,
+                MAX(CASE WHEN tipo='entrada' THEN fecha END) as ultima_entrada
+            FROM movimientos WHERE material_id = ?
+        ''', (m['id'],))
+        res = cursor.fetchone()
+
+        m['stock_actual'] = m['cantidad_inicial'] + (res['mov_cant'] or 0)
+
+        total_acumulado = (m['cantidad_inicial'] * m['precio_unitario']) + (res['total_entradas'] or 0)
+        total_cantidad = m['cantidad_inicial'] + (res['cant_entradas'] or 0)
+        m['costo_promedio_actual'] = (total_acumulado / total_cantidad) if total_cantidad > 0 else m['precio_unitario']
+
+        m['ultima_entrada'] = res['ultima_entrada']
+
+        materiales.append(m)
+
+    return materiales
+
 @app.route('/inventario', methods=['GET', 'POST'])
 def inventario():
     if request.method == 'POST':
         nombre = request.form['nombre']
+        codigo = request.form.get('codigo', '')
         descripcion = request.form.get('descripcion', '')
         tipo_material = request.form['tipo_material']
         numero_metrico = request.form['numero_metrico']
@@ -205,9 +271,9 @@ def inventario():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO materiales (nombre, descripcion, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente, drive_link)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ''', (nombre, descripcion, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente, drive_link))
+            INSERT INTO materiales (nombre, codigo, descripcion, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente, drive_link)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (nombre, codigo, descripcion, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente, drive_link))
         conn.commit()
         cursor.close()
         conn.close()
@@ -216,37 +282,9 @@ def inventario():
         return redirect(url_for('inventario'))
 
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    
-    # 1. Obtener todos los materiales
-    cursor.execute('SELECT * FROM materiales ORDER BY nombre ASC')
-    materiales_raw = cursor.fetchall()
-    
-    # 2. Calcular stock y costo promedio actual para cada uno
-    materiales = []
-    for mat in materiales_raw:
-        m = dict(mat)
-        
-        # Consultamos el acumulado de movimientos
-        cursor.execute('''
-            SELECT 
-                SUM(CASE WHEN tipo='entrada' THEN cantidad ELSE -cantidad END) as mov_cant,
-                SUM(CASE WHEN tipo='entrada' THEN (cantidad * precio_unitario) ELSE 0 END) as total_entradas,
-                SUM(CASE WHEN tipo='entrada' THEN cantidad ELSE 0 END) as cant_entradas
-            FROM movimientos WHERE material_id = %s
-        ''', (m['id'],))
-        res = cursor.fetchone()
-        
-        # Cálculo: Stock = Inicial + Entradas - Salidas
-        m['stock_actual'] = m['cantidad_inicial'] + (res['mov_cant'] or 0)
-        
-        # Cálculo: Costo Promedio (Total Invertido / Cantidad Total)
-        total_acumulado = (m['cantidad_inicial'] * m['precio_unitario']) + (res['total_entradas'] or 0)
-        total_cantidad = m['cantidad_inicial'] + (res['cant_entradas'] or 0)
-        
-        m['costo_promedio_actual'] = (total_acumulado / total_cantidad) if total_cantidad > 0 else m['precio_unitario']
-        
-        materiales.append(m)
+    cursor = conn.cursor()
+
+    materiales = obtener_materiales_con_stock(cursor)
 
     cursor.execute('SELECT * FROM grupos ORDER BY nombre ASC')
     grupos = cursor.fetchall()
@@ -265,6 +303,7 @@ def editar_material():
     if request.method == 'POST':
         id_material = int(request.form['id'])
         nombre = request.form['nombre']
+        codigo = request.form.get('codigo', '')
         descripcion = request.form.get('descripcion', '')
         tipo_material = request.form['tipo_material']
         numero_metrico = request.form['numero_metrico']
@@ -280,10 +319,10 @@ def editar_material():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('''
-            UPDATE materiales 
-            SET nombre = %s, descripcion = %s, tipo_material = %s, numero_metrico = %s, origen = %s, empresa = %s, presentacion = %s, unidad = %s, cantidad_inicial = %s, precio_unitario = %s, fuente = %s, drive_link = %s
-            WHERE id = %s
-        ''', (nombre, descripcion, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente, drive_link, id_material))
+            UPDATE materiales
+            SET nombre = ?, codigo = ?, descripcion = ?, tipo_material = ?, numero_metrico = ?, origen = ?, empresa = ?, presentacion = ?, unidad = ?, cantidad_inicial = ?, precio_unitario = ?, fuente = ?, drive_link = ?
+            WHERE id = ?
+        ''', (nombre, codigo, descripcion, tipo_material, numero_metrico, origen, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, fuente, drive_link, id_material))
         conn.commit()
         cursor.close()
         conn.close()
@@ -300,13 +339,13 @@ def agregar_grupo_ajax():
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute('INSERT INTO grupos (nombre) VALUES (%s) RETURNING id', (nombre,))
+        cursor.execute('INSERT INTO grupos (nombre) VALUES (?) RETURNING id', (nombre,))
         nuevo_id = cursor.fetchone()[0]
         conn.commit()
         cursor.close()
         conn.close()
         return jsonify({'success': True, 'id': nuevo_id, 'nombre': nombre})
-    except IntegrityError:
+    except sqlite3.IntegrityError:
         conn.rollback()
         cursor.close()
         conn.close()
@@ -326,15 +365,15 @@ def editar_grupo_ajax():
     cursor = conn.cursor()
     try:
         # Actualizar grupo
-        cursor.execute('UPDATE grupos SET nombre = %s WHERE id = %s', (nombre, id))
+        cursor.execute('UPDATE grupos SET nombre = ? WHERE id = ?', (nombre, id))
         # Actualizar todos los materiales que usaban este grupo al nuevo nombre
         if nombre != nombre_viejo:
-            cursor.execute('UPDATE materiales SET tipo_material = %s WHERE tipo_material = %s', (nombre, nombre_viejo))
+            cursor.execute('UPDATE materiales SET tipo_material = ? WHERE tipo_material = ?', (nombre, nombre_viejo))
         conn.commit()
         cursor.close()
         conn.close()
         return jsonify({'success': True})
-    except IntegrityError:
+    except sqlite3.IntegrityError:
         conn.rollback()
         cursor.close()
         conn.close()
@@ -357,7 +396,7 @@ def eliminar_grupo_ajax():
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute('DELETE FROM grupos WHERE id = %s', (id,))
+        cursor.execute('DELETE FROM grupos WHERE id = ?', (id,))
         conn.commit()
         cursor.close()
         conn.close()
@@ -383,7 +422,7 @@ def actualizar_vinculo_ajax():
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute(f'UPDATE materiales SET {columna} = %s WHERE id = %s', (link, material_id))
+        cursor.execute(f'UPDATE materiales SET {columna} = ? WHERE id = ?', (link, material_id))
         conn.commit()
         cursor.close()
         conn.close()
@@ -404,7 +443,7 @@ def agregar_proveedor_ajax():
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute('INSERT INTO proveedores (nit, nombre) VALUES (%s, %s) RETURNING id', (nit, nombre))
+        cursor.execute('INSERT INTO proveedores (nit, nombre) VALUES (?, ?) RETURNING id', (nit, nombre))
         nuevo_id = cursor.fetchone()[0]
         conn.commit()
         cursor.close()
@@ -431,10 +470,10 @@ def editar_proveedor_ajax():
     cursor = conn.cursor()
     try:
         # Actualizar proveedor
-        cursor.execute('UPDATE proveedores SET nit = %s, nombre = %s WHERE id = %s', (nit, nombre, id))
+        cursor.execute('UPDATE proveedores SET nit = ?, nombre = ? WHERE id = ?', (nit, nombre, id))
         # Actualizar todos los materiales que usaban este proveedor al nuevo nombre
         if nombre != nombre_viejo:
-            cursor.execute('UPDATE materiales SET empresa = %s WHERE empresa = %s', (nombre, nombre_viejo))
+            cursor.execute('UPDATE materiales SET empresa = ? WHERE empresa = ?', (nombre, nombre_viejo))
         conn.commit()
         cursor.close()
         conn.close()
@@ -457,7 +496,7 @@ def eliminar_proveedor_ajax():
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute('DELETE FROM proveedores WHERE id = %s', (id,))
+        cursor.execute('DELETE FROM proveedores WHERE id = ?', (id,))
         conn.commit()
         cursor.close()
         conn.close()
@@ -470,60 +509,82 @@ def eliminar_proveedor_ajax():
 
 @app.route('/agregar_entrada', methods=['POST'])
 def agregar_entrada():
+    # Entrada de inventario respaldada SIEMPRE por una factura de compra.
     if request.method == 'POST':
         material_id = int(request.form['material_id'])
         cantidad = float(request.form['cantidad'])
-        
-        # Asigna 0.0 temporalmente si el precio viene vacío
+
         precio_str = request.form.get('precio', '').strip()
         precio = float(precio_str) if precio_str else 0.0
-        
+
         fecha = request.form.get('fecha')
         fecha_factura = request.form.get('fecha_factura', '')
-        
-        tipo_documento = request.form.get('tipo_documento') 
-        # En tu form, este input captura lo que el usuario escribe (ya sea Factura u Orden)
-        numero_documento = request.form.get('numero_documento', '').strip() 
+        numero_documento = request.form.get('numero_documento', '').strip()
 
         if not fecha:
             fecha = datetime.now().strftime('%Y-%m-%d')
 
         conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    
-        if tipo_documento == 'devolucion':
-            # Buscamos la salida donde el 'documento' sea igual a la Orden ingresada
-            cursor.execute('''
-                SELECT precio_unitario FROM movimientos
-                WHERE material_id = %s AND tipo = 'salida' AND documento = %s
-                ORDER BY id DESC
-                LIMIT 1
-            ''', (material_id, numero_documento))
-            salida = cursor.fetchone()
-            
-            if salida:
-                precio = salida['precio_unitario'] # Reemplazamos por el costo exacto
-            else:
-                cursor.close()
-                conn.close()
-                flash(f"Error: No se encontró una salida asociada a la Orden '{numero_documento}'.", "error")
-                return redirect(url_for('index'))
-            
-            documento_bd = "Devolución"
-        else:
-            documento_bd = "Factura"
-
-        # Registrar la entrada
+        cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO movimientos (material_id, tipo, cantidad, precio_unitario, fecha, documento, numero_documento, fecha_factura)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        ''', (material_id, 'entrada', cantidad, precio, fecha, documento_bd, numero_documento, fecha_factura))
-        
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (material_id, 'entrada', cantidad, precio, fecha, 'Factura', numero_documento, fecha_factura))
+
         conn.commit()
         cursor.close()
         conn.close()
-        
-        flash(f"Éxito: {documento_bd} registrada correctamente.", "success")
+
+        flash("Éxito: Factura registrada correctamente.", "success")
+        if request.form.get('origen') == 'vista_entradas':
+            return redirect(url_for('entradas'))
+        return redirect(url_for('index'))
+
+@app.route('/agregar_devolucion', methods=['POST'])
+def agregar_devolucion():
+    # Proceso independiente: devuelve al stock unidades de una salida previa,
+    # usando el costo exacto con el que salieron (no requiere factura nueva).
+    if request.method == 'POST':
+        material_id = int(request.form['material_id'])
+        cantidad = float(request.form['cantidad'])
+        fecha = request.form.get('fecha')
+        numero_orden = request.form.get('numero_documento', '').strip()
+
+        if not fecha:
+            fecha = datetime.now().strftime('%Y-%m-%d')
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Buscamos la salida cuya Orden (documento) coincide con la ingresada
+        cursor.execute('''
+            SELECT precio_unitario FROM movimientos
+            WHERE material_id = ? AND tipo = 'salida' AND documento = ?
+            ORDER BY id DESC
+            LIMIT 1
+        ''', (material_id, numero_orden))
+        salida = cursor.fetchone()
+
+        if not salida:
+            cursor.close()
+            conn.close()
+            flash(f"Error: No se encontró una salida asociada a la Orden '{numero_orden}'.", "error")
+            if request.form.get('origen') == 'vista_entradas':
+                return redirect(url_for('entradas'))
+            return redirect(url_for('index'))
+
+        precio = salida['precio_unitario']
+
+        cursor.execute('''
+            INSERT INTO movimientos (material_id, tipo, cantidad, precio_unitario, fecha, documento, numero_documento)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (material_id, 'entrada', cantidad, precio, fecha, 'Devolución', numero_orden))
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        flash("Éxito: Devolución registrada correctamente.", "success")
         if request.form.get('origen') == 'vista_entradas':
             return redirect(url_for('entradas'))
         return redirect(url_for('index'))
@@ -538,11 +599,11 @@ def api_precio_devolucion():
         return jsonify({'success': False, 'error': 'Faltan datos'})
 
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cursor = conn.cursor()
     # Busca el precio original basado en la orden (documento)
     cursor.execute('''
         SELECT precio_unitario FROM movimientos
-        WHERE material_id = %s AND tipo = 'salida' AND documento = %s
+        WHERE material_id = ? AND tipo = 'salida' AND documento = ?
         ORDER BY id DESC
         LIMIT 1
     ''', (material_id, orden))
@@ -576,17 +637,17 @@ def agregar_salida():
             return redirect(url_for('index'))
 
         conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cursor = conn.cursor()
     
 
         # 2. Validar existencias actuales
-        cursor.execute('SELECT * FROM materiales WHERE id = %s', (material_id,))
+        cursor.execute('SELECT * FROM materiales WHERE id = ?', (material_id,))
         material = cursor.fetchone()
         cant_actual = material['cantidad_inicial']
         total_actual = material['cantidad_inicial'] * material['precio_unitario']
         precio_promedio = material['precio_unitario']
         
-        cursor.execute('SELECT * FROM movimientos WHERE material_id = %s ORDER BY fecha ASC, id ASC', (material_id,))
+        cursor.execute('SELECT * FROM movimientos WHERE material_id = ? ORDER BY fecha ASC, id ASC', (material_id,))
         movimientos = cursor.fetchall()
         for mov in movimientos:
             if mov['tipo'] == 'entrada':
@@ -610,7 +671,7 @@ def agregar_salida():
         # Si hay stock y correlativo único, registrar la salida
         cursor.execute('''
             INSERT INTO movimientos (material_id, tipo, cantidad, precio_unitario, fecha, documento, numero_documento, departamento, solicitante)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (material_id, 'salida', cantidad_a_sacar, precio_promedio, fecha, documento, numero_documento, departamento, solicitante))
         
         conn.commit()
@@ -628,8 +689,8 @@ def eliminar_material(id):
     if request.method == 'POST':
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('DELETE FROM movimientos WHERE material_id = %s', (id,))
-        cursor.execute('DELETE FROM materiales WHERE id = %s', (id,))
+        cursor.execute('DELETE FROM movimientos WHERE material_id = ?', (id,))
+        cursor.execute('DELETE FROM materiales WHERE id = ?', (id,))
         conn.commit()
         cursor.close()
         conn.close()
@@ -639,7 +700,7 @@ def eliminar_material(id):
 @app.route('/entradas')
 def entradas():
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cursor = conn.cursor()
     cursor.execute('SELECT * FROM materiales ORDER BY nombre ASC')
     materiales = cursor.fetchall()
     cursor.close()
@@ -649,7 +710,7 @@ def entradas():
 @app.route('/salidas')
 def salidas():
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cursor = conn.cursor()
     cursor.execute('SELECT * FROM materiales ORDER BY nombre ASC')
     materiales = cursor.fetchall()
     cursor.close()
@@ -659,37 +720,45 @@ def salidas():
 @app.route('/reporte')
 def reporte():
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cursor = conn.cursor()
     
     cursor.execute('SELECT * FROM materiales ORDER BY nombre ASC')
     materiales = cursor.fetchall()
     
     selected_material_id = request.args.get('material_id', type=int)
-    mes_filtro = request.args.get('mes')
-    if not mes_filtro:
+    mes_filtro = request.args.get('mes') or ''
+    fecha_filtro = request.args.get('fecha') or ''
+    orden_busqueda = (request.args.get('orden') or '').strip()
+
+    if fecha_filtro:
+        mes_filtro = ''  # la fecha específica tiene prioridad sobre el mes
+    elif not mes_filtro:
         mes_filtro = datetime.now().strftime('%Y-%m')
-        
+
     reporte_datos = None
-    
+
     if selected_material_id:
-        cursor.execute('SELECT * FROM materiales WHERE id = %s', (selected_material_id,))
+        cursor.execute('SELECT * FROM materiales WHERE id = ?', (selected_material_id,))
         mat = cursor.fetchone()
         if mat:
             mat_id = mat['id']
             cant_saldo = mat['cantidad_inicial']
             precio_promedio = mat['precio_unitario']
             total_saldo = cant_saldo * precio_promedio
-            
-            cursor.execute('SELECT * FROM movimientos WHERE material_id = %s ORDER BY fecha ASC, id ASC', (mat_id,))
+
+            cursor.execute('SELECT * FROM movimientos WHERE material_id = ? ORDER BY fecha ASC, id ASC', (mat_id,))
             movimientos = cursor.fetchall()
-            
-            if mes_filtro != 'todos':
+
+            if fecha_filtro:
+                movs_anteriores = [m for m in movimientos if str(m['fecha']) < fecha_filtro]
+                movs_actuales = [m for m in movimientos if str(m['fecha']) == fecha_filtro]
+            elif mes_filtro != 'todos':
                 movs_anteriores = [m for m in movimientos if str(m['fecha']) < f"{mes_filtro}-01"]
                 movs_actuales = [m for m in movimientos if str(m['fecha']).startswith(mes_filtro)]
             else:
                 movs_anteriores = []
                 movs_actuales = movimientos
-                
+
             for mov in movs_anteriores:
                 if mov['tipo'] == 'entrada':
                     costo_movimiento = mov['cantidad'] * mov['precio_unitario']
@@ -703,28 +772,31 @@ def reporte():
 
             filas_kardex = []
             # Primera fila: El saldo inicial o anterior según el filtro
-            titulo_saldo = 'Saldo Inicial' if mes_filtro == 'todos' else f'Saldo Anterior ({mes_filtro})'
+            if fecha_filtro:
+                titulo_saldo = f'Saldo Anterior (antes del {fecha_filtro})'
+            else:
+                titulo_saldo = 'Saldo Inicial' if mes_filtro == 'todos' else f'Saldo Anterior ({mes_filtro})'
             filas_kardex.append({
                 'fecha': '-', 'detalle': titulo_saldo,
                 'ing_cant': '', 'ing_costo': '', 'ing_total': '',
                 'sal_cant': '', 'sal_costo': '', 'sal_total': '',
                 'saldo_cant': cant_saldo, 'saldo_costo': precio_promedio, 'saldo_total': total_saldo
             })
-            
+
             for mov in movs_actuales:
                 doc_info = ""
                 if mov['documento'] and mov['numero_documento']:
                     doc_info = f" ({mov['documento']} #{mov['numero_documento']})"
                 elif mov['documento']:
                     doc_info = f" ({mov['documento']})"
-                    
+
                 if mov['tipo'] == 'entrada':
                     costo_movimiento = mov['cantidad'] * mov['precio_unitario']
                     cant_saldo += mov['cantidad']
                     total_saldo += costo_movimiento
                     if cant_saldo > 0:
                         precio_promedio = total_saldo / cant_saldo
-                    
+
                     filas_kardex.append({
                         'fecha': mov['fecha'], 'detalle': f"Entrada / Compra{doc_info}",
                         'ing_cant': mov['cantidad'], 'ing_costo': mov['precio_unitario'], 'ing_total': costo_movimiento,
@@ -735,25 +807,41 @@ def reporte():
                     costo_movimiento = mov['cantidad'] * precio_promedio
                     cant_saldo -= mov['cantidad']
                     total_saldo -= costo_movimiento
-                    
+
                     filas_kardex.append({
                         'fecha': mov['fecha'], 'detalle': f"Salida / Egreso{doc_info}",
                         'ing_cant': '', 'ing_costo': '', 'ing_total': '',
                         'sal_cant': mov['cantidad'], 'sal_costo': precio_promedio, 'sal_total': costo_movimiento,
                         'saldo_cant': cant_saldo, 'saldo_costo': precio_promedio, 'saldo_total': total_saldo
                     })
-                    
+
             reporte_datos = {'material': mat, 'filas': filas_kardex}
-    
+
+    resultados_orden = None
+    if orden_busqueda:
+        cursor.execute('''
+            SELECT mov.*, mat.nombre AS material_nombre, mat.codigo AS material_codigo
+            FROM movimientos mov
+            JOIN materiales mat ON mat.id = mov.material_id
+            WHERE mov.numero_documento LIKE ? OR mov.documento LIKE ?
+            ORDER BY mov.fecha ASC, mov.id ASC
+        ''', (f'%{orden_busqueda}%', f'%{orden_busqueda}%'))
+        resultados_orden = [dict(m) for m in cursor.fetchall()]
+        for r in resultados_orden:
+            r['total'] = r['cantidad'] * r['precio_unitario']
+
     cursor.close()
     conn.close()
-    return render_template('reporte.html', materiales=materiales, reporte_datos=reporte_datos, selected_material_id=selected_material_id, mes_filtro=mes_filtro)
+    return render_template('reporte.html', materiales=materiales, reporte_datos=reporte_datos,
+                           selected_material_id=selected_material_id, mes_filtro=mes_filtro,
+                           fecha_filtro=fecha_filtro, orden_busqueda=orden_busqueda,
+                           resultados_orden=resultados_orden)
 
 # --- RUTAS DE EXPORTACIÓN A EXCEL (CSV) ---
 @app.route('/exportar_inventario')
 def exportar_inventario():
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cursor = conn.cursor()
     cursor.execute('SELECT * FROM materiales ORDER BY nombre ASC')
     materiales = cursor.fetchall()
     cursor.close()
@@ -825,13 +913,13 @@ def exportar_kardex():
             nombre_archivo = "Kardex_General.xlsx"
 
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cursor = conn.cursor()
     cursor.execute('SELECT * FROM materiales ORDER BY nombre ASC')
     materiales = cursor.fetchall()
 
     movimientos_por_material = {}
     for mat in materiales:
-        cursor.execute('SELECT * FROM movimientos WHERE material_id = %s ORDER BY fecha ASC, id ASC', (mat['id'],))
+        cursor.execute('SELECT * FROM movimientos WHERE material_id = ? ORDER BY fecha ASC, id ASC', (mat['id'],))
         movimientos_por_material[mat['id']] = cursor.fetchall()
 
     materiales_kardex, _, _, _ = preparar_datos_kardex(materiales, movimientos_por_material, mes_filtro)
@@ -944,7 +1032,7 @@ def cargar_excel():
         if file and file.filename.endswith('.xlsx'):
             try:
                 conn = get_db_connection()
-                cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+                cursor = conn.cursor()
                 workbook = openpyxl.load_workbook(file)
                 sheet = workbook.active
                 
@@ -954,7 +1042,7 @@ def cargar_excel():
                 
                 sql_insert = '''
                     INSERT INTO materiales (nombre, descripcion, tipo_material, numero_metrico, origen, fuente, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, drive_link)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 '''
                 
                 for i, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
@@ -979,13 +1067,13 @@ def cargar_excel():
                         empresa = str(empresa_raw).strip()
 
                         # En PostgreSQL, ON CONFLICT (nombre) DO NOTHING requiere que la columna tenga restricción UNIQUE
-                        cursor.execute('INSERT INTO grupos (nombre) VALUES (%s) ON CONFLICT (nombre) DO NOTHING', (tipo_material,))
-                        cursor.execute('INSERT INTO fuentes (nombre) VALUES (%s) ON CONFLICT (nombre) DO NOTHING', (fuente,))
+                        cursor.execute('INSERT INTO grupos (nombre) VALUES (?) ON CONFLICT (nombre) DO NOTHING', (tipo_material,))
+                        cursor.execute('INSERT INTO fuentes (nombre) VALUES (?) ON CONFLICT (nombre) DO NOTHING', (fuente,))
                         
-                        cursor.execute('SELECT id FROM proveedores WHERE nombre = %s', (empresa,))
+                        cursor.execute('SELECT id FROM proveedores WHERE nombre = ?', (empresa,))
                         prov_exists = cursor.fetchone()
                         if not prov_exists:
-                            cursor.execute('INSERT INTO proveedores (nombre, nit) VALUES (%s, %s)', (empresa, ''))
+                            cursor.execute('INSERT INTO proveedores (nombre, nit) VALUES (?, ?)', (empresa, ''))
 
                         cantidad_inicial = float(cantidad_inicial_raw)
                         precio_unitario = float(precio_unitario_raw)
@@ -1027,7 +1115,7 @@ def admin():
         return render_template('admin.html', login_required=True)
 
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cursor = conn.cursor()
     
     if request.method == 'POST':
         accion = request.form.get('accion')
@@ -1039,27 +1127,27 @@ def admin():
             
         if accion == 'grupo':
             try:
-                cursor.execute('INSERT INTO grupos (nombre) VALUES (%s)', (request.form['nombre_grupo'],))
+                cursor.execute('INSERT INTO grupos (nombre) VALUES (?)', (request.form['nombre_grupo'],))
                 flash("Éxito: Grupo agregado correctamente.", "success")
-            except IntegrityError:
+            except sqlite3.IntegrityError:
                 conn.rollback()
                 flash("Error: El grupo ya existe.", "error")
                 
         elif accion == 'proveedor':
-            cursor.execute('INSERT INTO proveedores (nit, nombre) VALUES (%s, %s)', 
+            cursor.execute('INSERT INTO proveedores (nit, nombre) VALUES (?, ?)', 
                            (request.form['nit'], request.form['nombre']))
             flash("Éxito: Proveedor agregado correctamente.", "success")
             
         elif accion == 'fuente':
             try:
-                cursor.execute('INSERT INTO fuentes (nombre) VALUES (%s)', (request.form['nombre_fuente'],))
+                cursor.execute('INSERT INTO fuentes (nombre) VALUES (?)', (request.form['nombre_fuente'],))
                 flash("Éxito: Fuente agregada correctamente.", "success")
-            except IntegrityError:
+            except sqlite3.IntegrityError:
                 conn.rollback()
                 flash("Error: La fuente ya existe.", "error")
 
         elif accion == 'agregar_ip':
-            cursor.execute('INSERT INTO ips_autorizadas (ip_direccion, descripcion) VALUES (%s, %s)', 
+            cursor.execute('INSERT INTO ips_autorizadas (ip_direccion, descripcion) VALUES (?, ?)', 
                            (request.form['nueva_ip'], request.form['desc_ip']))
             conn.commit()
             flash("IP agregada a la lista blanca.", "success")
@@ -1107,7 +1195,7 @@ def admin_listar_movimientos():
     mes = request.args.get('mes')
 
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cursor = conn.cursor()
 
     query = '''
         SELECT mov.*, mat.nombre AS material_nombre, mat.unidad AS material_unidad
@@ -1117,13 +1205,13 @@ def admin_listar_movimientos():
     '''
     params = []
     if material_id:
-        query += ' AND mov.material_id = %s'
+        query += ' AND mov.material_id = ?'
         params.append(material_id)
     if tipo in ('entrada', 'salida'):
-        query += ' AND mov.tipo = %s'
+        query += ' AND mov.tipo = ?'
         params.append(tipo)
     if mes:
-        query += " AND to_char(mov.fecha, 'YYYY-MM') = %s"
+        query += " AND strftime('%Y-%m', mov.fecha) = ?"
         params.append(mes)
     query += ' ORDER BY mov.fecha DESC, mov.id DESC LIMIT 300'
 
@@ -1165,7 +1253,7 @@ def admin_editar_movimiento():
     cursor = conn.cursor()
     try:
         # El correlativo debe seguir siendo único, excluyendo el propio registro
-        cursor.execute('SELECT id FROM movimientos WHERE numero_documento = %s AND id != %s', (numero_documento, id_mov))
+        cursor.execute('SELECT id FROM movimientos WHERE numero_documento = ? AND id != ?', (numero_documento, id_mov))
         if cursor.fetchone():
             cursor.close()
             conn.close()
@@ -1173,9 +1261,9 @@ def admin_editar_movimiento():
 
         cursor.execute('''
             UPDATE movimientos
-            SET cantidad = %s, precio_unitario = %s, fecha = %s, documento = %s,
-                numero_documento = %s, fecha_factura = %s, departamento = %s, solicitante = %s
-            WHERE id = %s
+            SET cantidad = ?, precio_unitario = ?, fecha = ?, documento = ?,
+                numero_documento = ?, fecha_factura = ?, departamento = ?, solicitante = ?
+            WHERE id = ?
         ''', (cantidad, precio_unitario, fecha, documento, numero_documento, fecha_factura, departamento, solicitante, id_mov))
         conn.commit()
         cursor.close()
@@ -1202,7 +1290,7 @@ def admin_eliminar_movimiento():
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute('DELETE FROM movimientos WHERE id = %s', (id_mov,))
+        cursor.execute('DELETE FROM movimientos WHERE id = ?', (id_mov,))
         conn.commit()
         cursor.close()
         conn.close()
@@ -1218,7 +1306,7 @@ def admin_eliminar_movimiento():
 def eliminar_grupo(id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('DELETE FROM grupos WHERE id = %s', (id,))
+    cursor.execute('DELETE FROM grupos WHERE id = ?', (id,))
     conn.commit()
     cursor.close()
     conn.close()
@@ -1229,7 +1317,7 @@ def eliminar_grupo(id):
 def eliminar_proveedor(id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('DELETE FROM proveedores WHERE id = %s', (id,))
+    cursor.execute('DELETE FROM proveedores WHERE id = ?', (id,))
     conn.commit()
     cursor.close()
     conn.close()
@@ -1240,7 +1328,7 @@ def eliminar_proveedor(id):
 def eliminar_fuente(id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('DELETE FROM fuentes WHERE id = %s', (id,))
+    cursor.execute('DELETE FROM fuentes WHERE id = ?', (id,))
     conn.commit()
     cursor.close()
     conn.close()
@@ -1251,17 +1339,26 @@ def eliminar_fuente(id):
 def eliminar_ip(id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('DELETE FROM ips_autorizadas WHERE id = %s', (id,))
+    cursor.execute('DELETE FROM ips_autorizadas WHERE id = ?', (id,))
     conn.commit()
     cursor.close()
     conn.close()
     flash("Éxito: IP eliminada de la lista blanca.", "success")
     return redirect(url_for('admin'))
 
+@app.route('/quote')
+def quote():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    materiales = obtener_materiales_con_stock(cursor)
+    cursor.close()
+    conn.close()
+    return render_template('quote.html', materiales=materiales)
+
 @app.route('/consultor')
 def consultor():
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cursor = conn.cursor()
     
     cursor.execute('SELECT * FROM materiales ORDER BY nombre ASC')
     materiales_db = cursor.fetchall()
@@ -1270,7 +1367,7 @@ def consultor():
     for mat in materiales_db:
         mat_id = mat['id']
         cant_saldo = mat['cantidad_inicial']
-        cursor.execute('SELECT tipo, cantidad FROM movimientos WHERE material_id = %s', (mat_id,))
+        cursor.execute('SELECT tipo, cantidad FROM movimientos WHERE material_id = ?', (mat_id,))
         movimientos = cursor.fetchall()
         
         for mov in movimientos:
@@ -1291,4 +1388,5 @@ def consultor():
     return render_template('consultor.html', materiales=stock_materiales)
 
 if __name__ == '__main__':
+    init_db()
     app.run(host='0.0.0.0', port=3000, debug=True)

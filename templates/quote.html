@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+        <h2>Quote - Consulta para Cotización</h2>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="buscador-input-wrapper" style="min-width: 300px;">
+                <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Buscar por nombre, código o descripción..." style="padding: 8px 34px 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;">
+                <button type="button" class="buscador-clear-btn" id="searchClear" onclick="limpiarBusqueda()" title="Limpiar búsqueda">✕</button>
+            </div>
+            <span class="buscador-contador" id="searchContador"></span>
+        </div>
+    </div>
+
+    <div class="kardex-tabla-contenedor">
+        <table class="kardex-tabla">
+            <thead>
+                <tr>
+                    <th class="hdr-gris col-texto">Código</th>
+                    <th class="hdr-gris col-texto">Nombre</th>
+                    <th class="hdr-gris col-texto">Descripción</th>
+                    <th class="hdr-naranja">Stock</th>
+                    <th class="hdr-amarillo">Precio Promedio Actual</th>
+                    <th class="hdr-gris col-texto">Última Entrada</th>
+                </tr>
+            </thead>
+            <tbody id="tabla-materiales">
+                {% for mat in materiales %}
+                <tr>
+                    <td class="col-texto">{{ mat['codigo'] or '-' }}</td>
+                    <td class="col-texto"><strong>{{ mat['nombre'] }}</strong></td>
+                    <td class="col-texto">{{ mat['descripcion'] or '' }}</td>
+                    <td class="celda-naranja" style="font-size: 16px; font-weight: bold; text-align: center;">{{ "{:,}".format(mat['stock_actual']) }}</td>
+                    <td class="celda-amarilla" style="text-align: right;">Q {{ "{:,.2f}".format(mat['costo_promedio_actual']) }}</td>
+                    <td class="col-texto">{{ mat['ultima_entrada'] or 'Sin entradas registradas' }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" style="padding: 20px; text-align: center; color: #7f8c8d;">No hay materiales para mostrar.</td>
+                </tr>
+                {% endfor %}
+                <tr id="no-results" style="display: none;">
+                    <td colspan="6" style="padding: 20px; text-align: center; color: #7f8c8d; background-color: #f8fafc;">
+                        No se encontraron resultados para su búsqueda.
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        function normalizeText(text) {
+            if (!text) return '';
+            return text.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+        }
+
+        function filterTable() {
+            const input = document.getElementById('searchInput');
+            const filter = normalizeText(input.value);
+            const tbody = document.getElementById('tabla-materiales');
+            const rows = tbody.getElementsByTagName('tr');
+            let visibleRows = 0;
+            let totalRows = 0;
+            let firstMatch = null;
+
+            document.getElementById('searchClear').style.display = input.value ? 'inline-flex' : 'none';
+
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                if (row.id === 'no-results') continue;
+                row.classList.remove('search-highlight');
+
+                const codigoCell = row.getElementsByTagName("td")[0];
+                const nombreCell = row.getElementsByTagName("td")[1];
+                const descCell = row.getElementsByTagName("td")[2];
+                if (!nombreCell) continue; // fila de "no hay materiales"
+
+                totalRows++;
+                const nombreText = normalizeText(nombreCell ? nombreCell.textContent || nombreCell.innerText : '');
+                const codigoText = normalizeText(codigoCell ? codigoCell.textContent || codigoCell.innerText : '');
+                const descText = normalizeText(descCell ? descCell.textContent || descCell.innerText : '');
+
+                if (filter === '' || nombreText.includes(filter) || codigoText.includes(filter) || descText.includes(filter)) {
+                    row.style.display = "";
+                    visibleRows++;
+                    if (filter !== '' && !firstMatch) firstMatch = row;
+                } else {
+                    row.style.display = "none";
+                }
+            }
+
+            if (firstMatch) {
+                firstMatch.classList.add('search-highlight');
+                firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+
+            document.getElementById('no-results').style.display = visibleRows > 0 ? 'none' : '';
+            document.getElementById('searchContador').textContent = filter === '' ? '' : (visibleRows + ' de ' + totalRows + ' materiales');
+        }
+
+        function limpiarBusqueda() {
+            const input = document.getElementById('searchInput');
+            input.value = '';
+            input.focus();
+            filterTable();
+        }
+
+        document.addEventListener('keydown', function(event) {
+            if (event.ctrlKey && event.key === 'f') {
+                event.preventDefault();
+                document.getElementById('searchInput').focus();
+            }
+        });
+    </script>
+{% endblock %}

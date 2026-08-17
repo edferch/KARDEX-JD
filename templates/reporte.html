@@ -2,30 +2,31 @@
 
 {% block content %}
     <h2>Reportes</h2>
-    
-    <div class="card" style="margin-bottom: 25px; padding: 20px;">
+
+    <!-- ===================== SECCIÓN 1: CONSULTA POR MATERIAL ===================== -->
+    <div class="card" style="margin-bottom: 15px; padding: 20px;">
+        <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #3b82f6; padding-bottom: 10px;">🔎 Consulta por Material</h3>
         <form method="GET" action="/reporte" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;" autocomplete="off">
             <div class="form-grupo" style="flex: 1; min-width: 250px; margin-bottom: 0;">
                 <label>Producto / Material:</label>
-                <div style="position: relative; width: 100%;">
-                    <input type="text" id="busquedaMaterialReporte" list="listaMateriales" placeholder="Escriba para buscar nombre o descripción..." autocomplete="off" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px;" required
-                    {% for mat in materiales %}{% if selected_material_id == mat['id'] %} value="{{ mat['nombre'] }} | {{ mat['tipo_material'] }} | {{ dict(mat).get('descripcion', '') }}" {% endif %}{% endfor %}>
-                    
+                <div class="buscador-material">
+                    <input type="text" id="busquedaMaterialReporte" class="input-buscador-material" placeholder="Escriba código, nombre o descripción..." autocomplete="off" required
+                    {% if reporte_datos %} value="{{ (reporte_datos.material['codigo'] + ' - ') if reporte_datos.material['codigo'] else '' }}{{ reporte_datos.material['nombre'] }}" {% endif %}>
                     <input type="hidden" name="material_id" id="hiddenMaterial_reporte" value="{{ selected_material_id or '' }}" required>
+                    <div class="dropdown-materiales" id="dropdownMaterialReporte"></div>
                 </div>
-
-                <datalist id="listaMateriales">
-                    {% for mat in materiales %}
-                    <option data-id="{{ mat['id'] }}" value="{{ mat['nombre'] }} | {{ mat['tipo_material'] }} | {{ dict(mat).get('descripcion', '') }}"></option>
-                    {% endfor %}
-                </datalist>
             </div>
-            
+
             <div class="form-grupo" style="margin-bottom: 0;">
                 <label>Filtrar por Mes:</label>
-                <input type="month" name="mes" value="{{ mes_filtro if mes_filtro != 'todos' else '' }}">
+                <input type="month" name="mes" id="inputMesReporte" value="{{ mes_filtro if mes_filtro and mes_filtro != 'todos' else '' }}">
             </div>
-            
+
+            <div class="form-grupo" style="margin-bottom: 0;">
+                <label>Fecha específica:</label>
+                <input type="date" name="fecha" id="inputFechaReporte" value="{{ fecha_filtro or '' }}">
+            </div>
+
             <button type="submit" class="btn" style="padding: 12px 24px;">Consultar</button>
             {% if selected_material_id %}
                 <a href="/reporte?material_id={{ selected_material_id }}&mes=todos" class="btn btn-secundario" style="padding: 12px 24px;">Histórico Completo</a>
@@ -36,35 +37,35 @@
     {% if reporte_datos %}
     <div style="background-color: white; border-radius: 12px; padding: 25px; margin-bottom: 30px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
         <h3 style="color: #1e293b; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; margin-top: 0; font-size: 20px;">
-            📦 {{ reporte_datos.material['nombre'] }} <span style="font-size: 14px; color: #64748b; font-weight: normal;">| Grupo: {{ reporte_datos.material['tipo_material'] }} | Unidad: {{ reporte_datos.material['unidad'] }}</span>
+            📦 {{ reporte_datos.material['nombre'] }} <span style="font-size: 14px; color: #64748b; font-weight: normal;">| Código: {{ reporte_datos.material['codigo'] or '-' }} | Grupo: {{ reporte_datos.material['tipo_material'] }} | Unidad: {{ reporte_datos.material['unidad'] }}</span>
         </h3>
 
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px;">
             {% set total_entradas = reporte_datos.filas | selectattr('ing_cant', '!=', '') | map(attribute='ing_cant') | sum %}
             {% set total_salidas = reporte_datos.filas | selectattr('sal_cant', '!=', '') | map(attribute='sal_cant') | sum %}
             {% set saldo_final = reporte_datos.filas[-1]['saldo_cant'] %}
-            
+
             <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                 <p style="margin:0; font-size:12px; color:#64748b; font-weight:800; letter-spacing: 0.5px;">SALDO ANTERIOR</p>
                 <h3 style="margin:8px 0 0 0; color:#1e293b; font-size: 24px;">{{ reporte_datos.filas[0]['saldo_cant'] }}</h3>
             </div>
-            
+
             <div style="background-color: #ecfdf5; border: 1px solid #d1fae5; border-left: 4px solid #10b981; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                 <p style="margin:0; font-size:12px; color:#065f46; font-weight:800; letter-spacing: 0.5px;">TOTAL ENTRADAS</p>
                 <h3 style="margin:8px 0 0 0; color:#059669; font-size: 24px;">+ {{ total_entradas }}</h3>
             </div>
-            
+
             <div style="background-color: #eff6ff; border: 1px solid #dbeafe; border-left: 4px solid #3b82f6; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                 <p style="margin:0; font-size:12px; color:#1e3a8a; font-weight:800; letter-spacing: 0.5px;">TOTAL SALIDAS</p>
                 <h3 style="margin:8px 0 0 0; color:#2563eb; font-size: 24px;">- {{ total_salidas }}</h3>
             </div>
-            
+
             <div style="background-color: #fff7ed; border: 1px solid #ffedd5; border-left: 4px solid #ea580c; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                 <p style="margin:0; font-size:12px; color:#9a3412; font-weight:800; letter-spacing: 0.5px;">SALDO FINAL</p>
                 <h3 style="margin:8px 0 0 0; color:#ea580c; font-size: 24px;">{{ saldo_final }}</h3>
             </div>
         </div>
-        
+
         <div class="kardex-tabla-contenedor">
             <table class="kardex-tabla" style="min-width: 900px;">
                 <thead>
@@ -77,15 +78,15 @@
                     <tr>
                         <th class="hdr-gris col-texto">Fecha</th>
                         <th class="hdr-gris col-texto">Detalle</th>
-                        
+
                         <th class="hdr-verde">Cant.</th>
                         <th class="hdr-verde">Costo U.</th>
                         <th class="hdr-verde">Total (Q)</th>
-                        
+
                         <th class="hdr-azul">Cant.</th>
                         <th class="hdr-azul">Costo U.</th>
                         <th class="hdr-azul">Total (Q)</th>
-                        
+
                         <th class="hdr-naranja">Cant.</th>
                         <th class="hdr-naranja">Costo Prom.</th>
                         <th class="hdr-naranja">Total (Q)</th>
@@ -96,15 +97,15 @@
                     <tr>
                         <td class="col-texto" style="white-space: nowrap;">{{ fila['fecha'] }}</td>
                         <td class="col-texto"><strong>{{ fila['detalle'] }}</strong></td>
-                        
+
                         <td class="celda-verde">{% if fila['ing_cant'] != '' %}{{ fila['ing_cant'] }}{% endif %}</td>
                         <td class="celda-verde">{% if fila['ing_costo'] != '' %}Q {{ "%.2f"|format(fila['ing_costo']) }}{% endif %}</td>
                         <td class="celda-verde">{% if fila['ing_total'] != '' %}Q {{ "%.2f"|format(fila['ing_total']) }}{% endif %}</td>
-                        
+
                         <td class="celda-azul">{% if fila['sal_cant'] != '' %}{{ fila['sal_cant'] }}{% endif %}</td>
                         <td class="celda-azul">{% if fila['sal_costo'] != '' %}Q {{ "%.2f"|format(fila['sal_costo']) }}{% endif %}</td>
                         <td class="celda-azul">{% if fila['sal_total'] != '' %}Q {{ "%.2f"|format(fila['sal_total']) }}{% endif %}</td>
-                        
+
                         <td class="celda-naranja" style="font-weight: bold;">{{ fila['saldo_cant'] }}</td>
                         <td class="celda-naranja">Q {{ "%.2f"|format(fila['saldo_costo']) }}</td>
                         <td class="celda-naranja" style="font-weight: bold;">Q {{ "%.2f"|format(fila['saldo_total']) }}</td>
@@ -114,58 +115,99 @@
             </table>
         </div>
     </div>
-    
+
     {% else %}
         {% if selected_material_id %}
-            <div style="padding: 20px; text-align: center; color: #b91c1c; background: #fee2e2; border-radius: 8px; font-weight: bold;">
+            <div style="padding: 20px; text-align: center; color: #b91c1c; background: #fee2e2; border-radius: 8px; font-weight: bold; margin-bottom: 30px;">
                 Material no encontrado en la base de datos.
             </div>
         {% else %}
-            <div style="padding: 50px 20px; text-align: center; color: #64748b; border: 2px dashed #cbd5e1; border-radius: 12px; background-color: #f8fafc;">
+            <div style="padding: 50px 20px; text-align: center; color: #64748b; border: 2px dashed #cbd5e1; border-radius: 12px; background-color: #f8fafc; margin-bottom: 30px;">
                 <span style="font-size: 24px;">👆</span><br><br>
                 Selecciona un producto en el menú desplegable para visualizar su registro automáticamente.
             </div>
         {% endif %}
     {% endif %}
 
+    <!-- ===================== SECCIÓN 2: CONSULTA POR ORDEN / DOCUMENTO ===================== -->
+    <div class="card" style="margin-bottom: 25px; padding: 20px;">
+        <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #f59e0b; padding-bottom: 10px;">📦 Consulta por Orden / Documento</h3>
+        <form method="GET" action="/reporte" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;" autocomplete="off">
+            <div class="form-grupo" style="flex: 1; min-width: 250px; margin-bottom: 0;">
+                <label>Número de Orden / Documento:</label>
+                <input type="text" name="orden" value="{{ orden_busqueda or '' }}" placeholder="Ej: ORD-2024-015 o FAC-045" required>
+            </div>
+            <button type="submit" class="btn" style="padding: 12px 24px; background-color: #f59e0b;">Buscar Orden</button>
+            {% if orden_busqueda %}
+                <a href="/reporte" class="btn btn-secundario" style="padding: 12px 24px;">Limpiar</a>
+            {% endif %}
+        </form>
+
+        {% if orden_busqueda %}
+            {% if resultados_orden %}
+                {% set materiales_involucrados = resultados_orden | map(attribute='material_id') | unique | list %}
+                <p style="margin: 18px 0 10px 0; font-size: 13px; color: #64748b; font-weight: 600;">
+                    {{ resultados_orden | length }} movimiento(s) encontrado(s) en {{ materiales_involucrados | length }} material(es) para "{{ orden_busqueda }}".
+                </p>
+                <div class="kardex-tabla-contenedor">
+                    <table class="kardex-tabla" style="min-width: 900px;">
+                        <thead>
+                            <tr>
+                                <th class="hdr-gris col-texto">Fecha</th>
+                                <th class="hdr-gris col-texto">Código</th>
+                                <th class="hdr-gris col-texto">Material</th>
+                                <th class="hdr-gris col-texto">Tipo</th>
+                                <th class="hdr-gris col-texto">Documento</th>
+                                <th class="hdr-gris col-texto">Núm. Documento</th>
+                                <th class="hdr-naranja">Cantidad</th>
+                                <th class="hdr-amarillo">Precio Unit. (Q)</th>
+                                <th class="hdr-verde">Total (Q)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in resultados_orden %}
+                            <tr>
+                                <td class="col-texto" style="white-space: nowrap;">{{ r.fecha }}</td>
+                                <td class="col-texto">{{ r.material_codigo or '' }}</td>
+                                <td class="col-texto"><strong>{{ r.material_nombre }}</strong></td>
+                                <td class="col-texto">
+                                    <span class="badge-tipo {{ 'badge-entrada' if r.tipo == 'entrada' else 'badge-salida' }}">{{ 'Entrada' if r.tipo == 'entrada' else 'Salida' }}</span>
+                                </td>
+                                <td class="col-texto">{{ r.documento or '' }}</td>
+                                <td class="col-texto">{{ r.numero_documento or '' }}</td>
+                                <td class="celda-naranja" style="text-align: right;">{{ "{:,}".format(r.cantidad) }}</td>
+                                <td class="celda-amarilla" style="text-align: right;">Q {{ "{:,.2f}".format(r.precio_unitario) }}</td>
+                                <td class="celda-verde" style="text-align: right; font-weight: bold;">Q {{ "{:,.2f}".format(r.total) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div style="padding: 20px; text-align: center; color: #b91c1c; background: #fee2e2; border-radius: 8px; font-weight: bold; margin-top: 15px;">
+                    No se encontraron movimientos para la orden "{{ orden_busqueda }}".
+                </div>
+            {% endif %}
+        {% endif %}
+    </div>
 
     <script>
-        function inicializarBusquedaMaterial(inputId, hiddenId) {
-            const input = document.getElementById(inputId);
-            const hidden = document.getElementById(hiddenId);
-            const datalist = document.getElementById('listaMateriales');
-            
-            if(!input || !hidden || !datalist) return;
+        const materialesBusquedaReporte = [
+            {% for mat in materiales %}
+            { id: {{ mat['id'] }}, codigo: {{ (dict(mat).get('codigo', '') or '') | tojson }}, nombre: {{ mat['nombre'] | tojson }}, descripcion: {{ (dict(mat).get('descripcion', '') or '') | tojson }} },
+            {% endfor %}
+        ];
 
-            // Si el campo está vacío, exige que seleccione uno
-            if (hidden.value === "") {
-                input.setCustomValidity("Debe seleccionar un material de la lista.");
-            }
+        crearBuscadorMaterial('busquedaMaterialReporte', 'hiddenMaterial_reporte', 'dropdownMaterialReporte', {
+            materiales: materialesBusquedaReporte
+        });
 
-            input.addEventListener('input', function() {
-                let foundId = "";
-                const options = datalist.options;
-                
-                for(let i=0; i < options.length; i++) {
-                    if(options[i].value === input.value) {
-                        foundId = options[i].getAttribute('data-id');
-                        break;
-                    }
-                }
-                
-                hidden.value = foundId;
-                
-                if (foundId === "") {
-                    input.setCustomValidity("Debe seleccionar un material válido de la lista sugerida.");
-                } else {
-                    input.setCustomValidity(""); // Es válido
-                }
-            });
-        }
-        
-        // Ejecutar la función cuando la página cargue
-        document.addEventListener('DOMContentLoaded', function() {
-            inicializarBusquedaMaterial('busquedaMaterialReporte', 'hiddenMaterial_reporte');
+        // Mes y fecha específica son excluyentes: elegir uno limpia el otro.
+        document.getElementById('inputFechaReporte').addEventListener('change', function() {
+            if (this.value) document.getElementById('inputMesReporte').value = '';
+        });
+        document.getElementById('inputMesReporte').addEventListener('change', function() {
+            if (this.value) document.getElementById('inputFechaReporte').value = '';
         });
     </script>
 {% endblock %}

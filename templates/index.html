@@ -78,7 +78,11 @@
         <!-- Barra de Filtrado y Búsqueda -->
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
             <div style="display: flex; gap: 10px; align-items: center; min-width: 300px; flex: 1;">
-                <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Buscar por nombre de material..." style="flex: 1; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; max-width: 400px;">
+                <div class="buscador-input-wrapper">
+                    <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Buscar por código o descripción..." style="padding: 8px 34px 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;">
+                    <button type="button" class="buscador-clear-btn" id="searchClear" onclick="limpiarBusqueda()" title="Limpiar búsqueda">✕</button>
+                </div>
+                <span class="buscador-contador" id="searchContador"></span>
                 <button onclick="document.getElementById('searchInput').focus()" class="btn btn-secundario" style="padding: 8px 14px;" title="Atajo: Ctrl + F">🔍 Buscar</button>
             </div>
             <form method="GET" action="/" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
@@ -91,7 +95,8 @@
         
         <!-- Botones de Acción Rápida -->
         <div style="display: flex; gap: 15px;">
-            <button onclick="abrirModalMovimiento('modalEntrada')" class="btn btn-entrada" style="flex: 1; font-size: 16px;">+ Registrar Entrada / Compra</button>
+            <button onclick="abrirModalMovimiento('modalEntrada')" class="btn btn-entrada" style="flex: 1; font-size: 16px;">+ Registrar Entrada (Factura)</button>
+            <button onclick="abrirModalMovimiento('modalDevolucion')" class="btn" style="flex: 1; font-size: 16px; background-color: #f59e0b;">↩ Registrar Devolución</button>
             <button onclick="abrirModalMovimiento('modalSalida')" class="btn btn-salida" style="flex: 1; font-size: 16px;">- Registrar Salida / Egreso</button>
             <a href="/exportar_kardex?mes={{ mes_filtro }}" class="btn" style="background-color: #10b981; padding: 12px 24px; display: flex; align-items: center;">📥 Descargar Kardex del Mes</a>
         </div>
@@ -109,7 +114,7 @@
                 </tr>
                 <tr>
                     <th class="hdr-gris col-texto">No.</th>
-                    <th class="hdr-gris col-texto">Nombre</th>
+                    <th class="hdr-gris col-texto">Código</th>
                     <th class="hdr-gris col-texto">Grupo</th>
                     
                     <th class="hdr-amarillo">Cant.</th>
@@ -138,10 +143,10 @@
                                     <div>
                                         {% if mat.drive_link %}
                                             <a href="{{ mat.drive_link }}" target="_blank" title="Abrir enlace de Drive" style="color: #2563eb; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
-                                                <strong>{{ mat['nombre'] }}</strong>
+                                                <strong>{{ mat['codigo'] or '' }}</strong>
                                             </a>
                                         {% else %}
-                                            <strong>{{ mat['nombre'] }}</strong>
+                                            <strong>{{ mat['codigo'] or '' }}</strong>
                                         {% endif %}
                                     </div>
                                     
@@ -228,38 +233,66 @@
         </table>
     </div>
 
-    <div class="overlay" id="fondoOscuro" onclick="cerrarModal('modalEntrada'); cerrarModal('modalSalida'); cerrarPanelNotificaciones();"></div>
+    <div class="overlay" id="fondoOscuro" onclick="cerrarModal('modalEntrada'); cerrarModal('modalDevolucion'); cerrarModal('modalSalida'); cerrarPanelNotificaciones();"></div>
 
     <div class="modal" id="modalEntrada">
-        <h3 style="color: #27ae60; margin-top: 0;">Nueva Entrada</h3>
+        <h3 style="color: #27ae60; margin-top: 0;">Nueva Entrada (Factura)</h3>
         <form method="POST" action="/agregar_entrada" autocomplete="off">
             <input type="hidden" name="origen" value="index">
             <div class="form-grupo">
                 <label>Seleccionar Material:</label>
-                <input type="text" id="busquedaMaterialEntrada" list="listaMateriales" placeholder="Escriba para buscar..." autocomplete="off" style="width: 100%; padding: 12px 16px; border: 1px solid #cbd5e1; border-radius: 8px;" required>
-                <input type="hidden" name="material_id" id="hiddenMaterial_entrada" required>
+                <div class="buscador-material">
+                    <input type="text" id="busquedaMaterialEntrada" class="input-buscador-material" placeholder="Escriba código, nombre o descripción..." autocomplete="off" required>
+                    <input type="hidden" name="material_id" id="hiddenMaterial_entrada" required>
+                    <div class="dropdown-materiales" id="dropdownMaterialEntrada"></div>
+                </div>
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <label style="margin: 0;">Fecha de Registro (Automática):</label>
                     <span onclick="desbloquearFecha('fechaEntrada')" style="font-size: 11px; color: #3b82f6; cursor: pointer; font-weight: 600; padding: 4px 8px; background-color: #eff6ff; border-radius: 6px; border: 1px solid #bfdbfe; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='#dbeafe'" onmouseout="this.style.backgroundColor='#eff6ff'" title="Desbloquear (Solo Admin)">Cambiar fecha</span>
                 </div>
                 <input type="date" name="fecha" id="fechaEntrada" required readonly style="background-color: #f1f5f9; cursor: not-allowed; color: #64748b; font-weight: 600;">
-                <label>Fecha de Factura / Documento:</label>
+                <label>Fecha de Factura:</label>
                 <input type="date" name="fecha_factura" id="fechaFacturaEntrada" required>
-                <label>Tipo de Documento:</label>
-                <select name="tipo_documento" id="tipoDocEntrada" onchange="actualizarLabelsEntrada()" required>
-                    <option value="factura">Factura</option>
-                    <option value="devolucion">Devolución</option>
-                </select>
-                <label id="lblNumeroDocumento">Número de Documento:</label>
-                <input type="text" name="numero_documento" id="inputNumeroDocumento" required>
+                <label>Número de Factura:</label>
+                <input type="text" name="numero_documento" id="inputNumeroDocumento" placeholder="Ej: FAC-123" required>
                 <label>Cantidad:</label>
                 <input type="number" step="any" name="cantidad" required>
-                <label id="lblPrecioEntrada">Costo de compra (Q):</label>
+                <label>Costo de compra (Q):</label>
                 <input type="number" step="0.01" name="precio" id="precioEntrada" required>
             </div>
             <div class="modal-acciones">
                 <button type="button" class="btn btn-secundario" onclick="cerrarModal('modalEntrada')">Cancelar</button>
-                <button type="submit" class="btn btn-entrada">Guardar Entrada</button>
+                <button type="submit" class="btn btn-entrada">Guardar Factura</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="modal" id="modalDevolucion">
+        <h3 style="color: #f59e0b; margin-top: 0;">Registrar Devolución</h3>
+        <form method="POST" action="/agregar_devolucion" autocomplete="off">
+            <input type="hidden" name="origen" value="index">
+            <div class="form-grupo">
+                <label>Seleccionar Material:</label>
+                <div class="buscador-material">
+                    <input type="text" id="busquedaMaterialDevolucion" class="input-buscador-material" placeholder="Escriba código, nombre o descripción..." autocomplete="off" required>
+                    <input type="hidden" name="material_id" id="hiddenMaterial_devolucion" required>
+                    <div class="dropdown-materiales" id="dropdownMaterialDevolucion"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label style="margin: 0;">Fecha de Registro (Automática):</label>
+                    <span onclick="desbloquearFecha('fechaDevolucion')" style="font-size: 11px; color: #3b82f6; cursor: pointer; font-weight: 600; padding: 4px 8px; background-color: #eff6ff; border-radius: 6px; border: 1px solid #bfdbfe; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='#dbeafe'" onmouseout="this.style.backgroundColor='#eff6ff'" title="Desbloquear (Solo Admin)">Cambiar fecha</span>
+                </div>
+                <input type="date" name="fecha" id="fechaDevolucion" required readonly style="background-color: #f1f5f9; cursor: not-allowed; color: #64748b; font-weight: 600;">
+                <label>Número de Orden (de donde salió):</label>
+                <input type="text" name="numero_documento" id="inputOrdenDevolucion" placeholder="Ej: ORD-001" required>
+                <label id="lblPrecioDevolucion">Costo (Automático por devolución):</label>
+                <input type="number" step="0.01" id="precioDevolucion" readonly style="background-color: #f1f5f9; cursor: not-allowed; color: #64748b; font-weight: 600;">
+                <label>Cantidad a devolver:</label>
+                <input type="number" step="any" name="cantidad" required>
+            </div>
+            <div class="modal-acciones">
+                <button type="button" class="btn btn-secundario" onclick="cerrarModal('modalDevolucion')">Cancelar</button>
+                <button type="submit" class="btn" style="background-color: #f59e0b;">Guardar Devolución</button>
             </div>
         </form>
     </div>
@@ -270,9 +303,12 @@
             <input type="hidden" name="origen" value="index">
             <div class="form-grupo">
                 <label>Seleccionar Material:</label>
-                <input type="text" id="busquedaMaterialSalida" list="listaMateriales" placeholder="Escriba para buscar..." autocomplete="off" style="width: 100%; padding: 12px 16px; border: 1px solid #cbd5e1; border-radius: 8px;" required>
-                <input type="hidden" name="material_id" id="hiddenMaterial_salida" required>
-                
+                <div class="buscador-material">
+                    <input type="text" id="busquedaMaterialSalida" class="input-buscador-material" placeholder="Escriba código, nombre o descripción..." autocomplete="off" required>
+                    <input type="hidden" name="material_id" id="hiddenMaterial_salida" required>
+                    <div class="dropdown-materiales" id="dropdownMaterialSalida"></div>
+                </div>
+
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top:10px;">
                     <label style="margin: 0;">Fecha de Registro (Automática):</label>
                     <span onclick="desbloquearFecha('fechaSalida')" style="font-size: 11px; color: #3b82f6; cursor: pointer; font-weight: 600; padding: 4px 8px; background-color: #eff6ff; border-radius: 6px; border: 1px solid #bfdbfe; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='#dbeafe'" onmouseout="this.style.backgroundColor='#eff6ff'" title="Desbloquear (Solo Admin)">Cambiar fecha</span>
@@ -338,12 +374,6 @@
         </div>
     </div>
 
-    <datalist id="listaMateriales">
-        {% for mat in materiales %}
-        <option data-id="{{ mat['id'] }}" value="{{ mat['nombre'] }} | {{ mat['tipo_material'] }} | {{ mat['descripcion'] or '' }}"></option>
-        {% endfor %}
-    </datalist>
-
     <div id="popoverDescripcion" style="display: none; position: absolute; background-color: #1e293b; color: white; padding: 10px 15px; border-radius: 8px; font-size: 13px; max-width: 250px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); z-index: 9999; white-space: pre-wrap; word-wrap: break-word; line-height: 1.5;">
     </div>
 
@@ -355,25 +385,46 @@
             const tbody = document.getElementById('tabla-materiales');
             const rows = tbody.getElementsByTagName('tr');
             let visibleRows = 0;
+            let totalRows = 0;
+            let firstMatch = null;
+
+            document.getElementById('searchClear').style.display = input.value ? 'inline-flex' : 'none';
 
             for (let i = 0; i < rows.length; i++) {
                 if (rows[i].id === 'no-results') continue; // Omitir la fila de "no resultados"
+                rows[i].classList.remove('search-highlight');
 
-                const nameCell = rows[i].getElementsByTagName("td")[1]; // Columna 1 es el Nombre+Descripción
-                if (nameCell) {
-                    // textContent extrae todo el texto, incluyendo el del span oculto
-                    const txtValue = nameCell.textContent || nameCell.innerText;
-                    const normalizedText = txtValue.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                    
-                    if (normalizedText.includes(filter)) {
-                        rows[i].style.display = "";
-                        visibleRows++;
-                    } else {
-                        rows[i].style.display = "none";
-                    }
+                const nameCell = rows[i].getElementsByTagName("td")[1]; // Columna 1 es el Código+Descripción
+                if (!nameCell) continue; // fila de "no hay materiales registrados"
+
+                totalRows++;
+                // textContent extrae todo el texto, incluyendo el del span oculto
+                const txtValue = nameCell.textContent || nameCell.innerText;
+                const normalizedText = txtValue.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+                if (normalizedText.includes(filter)) {
+                    rows[i].style.display = "";
+                    visibleRows++;
+                    if (filter !== '' && !firstMatch) firstMatch = rows[i];
+                } else {
+                    rows[i].style.display = "none";
                 }
             }
+
+            if (firstMatch) {
+                firstMatch.classList.add('search-highlight');
+                firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+
             document.getElementById('no-results').style.display = visibleRows > 0 ? 'none' : '';
+            document.getElementById('searchContador').textContent = filter === '' ? '' : (visibleRows + ' de ' + totalRows + ' materiales');
+        }
+
+        function limpiarBusqueda() {
+            const input = document.getElementById('searchInput');
+            input.value = '';
+            input.focus();
+            filterTable();
         }
 
         document.addEventListener('keydown', function(event) {
@@ -438,46 +489,14 @@
             }
         }
 
-        // --- MOTOR DEL MODAL INTELIGENTE ---
-        function actualizarLabelsEntrada() {
-            const tipo = document.getElementById('tipoDocEntrada').value;
-            const lblDoc = document.getElementById('lblNumeroDocumento');
-            const inputDoc = document.getElementById('inputNumeroDocumento');
-            const precioInput = document.getElementById('precioEntrada');
-            const lblPrecio = document.getElementById('lblPrecioEntrada');
-            
-            if (tipo === 'devolucion') {
-                lblDoc.innerText = 'Número de Orden (de donde salió):';
-                inputDoc.placeholder = 'Ej: ORD-001';
-                
-                precioInput.value = '0';
-                precioInput.setAttribute('readonly', 'true');
-                precioInput.style.backgroundColor = '#f1f5f9';
-                lblPrecio.innerText = 'Costo (Automático por devolución):';
-                
-                // Intenta buscar si ya hay datos escritos
-                buscarPrecioDevolucion();
-            } else {
-                lblDoc.innerText = 'Número de Documento (Factura):';
-                inputDoc.placeholder = 'Ej: FAC-123';
-                
-                precioInput.removeAttribute('readonly');
-                precioInput.style.backgroundColor = '#ffffff';
-                lblPrecio.innerText = 'Costo de compra (Q):';
-                lblPrecio.style.color = '#1e293b';
-                precioInput.value = '';
-            }
-        }
-
-        // Función que va a la base de datos en tiempo real
+        // --- MOTOR DEL MODAL DE DEVOLUCIÓN: busca en tiempo real el costo de la salida original ---
         function buscarPrecioDevolucion() {
-            const tipo = document.getElementById('tipoDocEntrada').value;
-            const materialId = document.getElementById('hiddenMaterial_entrada').value;
-            const orden = document.getElementById('inputNumeroDocumento').value.trim();
-            const precioInput = document.getElementById('precioEntrada');
-            const lblPrecio = document.getElementById('lblPrecioEntrada');
+            const materialId = document.getElementById('hiddenMaterial_devolucion').value;
+            const orden = document.getElementById('inputOrdenDevolucion').value.trim();
+            const precioInput = document.getElementById('precioDevolucion');
+            const lblPrecio = document.getElementById('lblPrecioDevolucion');
 
-            if (tipo === 'devolucion' && materialId && orden) {
+            if (materialId && orden) {
                 lblPrecio.innerText = 'Buscando costo... ⏳';
                 lblPrecio.style.color = '#3b82f6';
 
@@ -489,60 +508,35 @@
                             lblPrecio.innerText = 'Costo Automático (Q): ✅ Encontrado';
                             lblPrecio.style.color = '#10b981';
                         } else {
-                            precioInput.value = '0';
+                            precioInput.value = '';
                             lblPrecio.innerText = 'Costo: ❌ Orden no encontrada';
                             lblPrecio.style.color = '#ef4444';
                         }
                     })
                     .catch(error => {
-                        precioInput.value = '0';
+                        precioInput.value = '';
                         lblPrecio.innerText = 'Error de conexión';
                         lblPrecio.style.color = '#ef4444';
                     });
             }
         }
 
-        // Agregar los detectores para que busque automáticamente cuando escribas la orden
-        document.getElementById('inputNumeroDocumento').addEventListener('input', buscarPrecioDevolucion);
+        // Agregar el detector para que busque automáticamente cuando escribas la orden
+        document.getElementById('inputOrdenDevolucion').addEventListener('input', buscarPrecioDevolucion);
 
-        // --- LÓGICA DE BÚSQUEDA Y SELECCIÓN DE MATERIALES ---
-        // (Reemplaza la que ya tienes por esta que activa la búsqueda automática de precio)
-        function inicializarBusquedaMaterial(inputId, hiddenId) {
-            const input = document.getElementById(inputId);
-            const hidden = document.getElementById(hiddenId);
-            const datalist = document.getElementById('listaMateriales');
-            
-            if(!input || !hidden || !datalist) return;
+        // --- LÓGICA DE BÚSQUEDA Y SELECCIÓN DE MATERIALES (autocompletado personalizado) ---
+        const materialesBusqueda = [
+            {% for mat in materiales %}
+            { id: {{ mat['id'] }}, codigo: {{ (mat['codigo'] or '') | tojson }}, nombre: {{ mat['nombre'] | tojson }}, descripcion: {{ (mat['descripcion'] or '') | tojson }} },
+            {% endfor %}
+        ];
 
-            input.setCustomValidity("Debe seleccionar un material de la lista.");
-
-            input.addEventListener('input', function() {
-                let foundId = "";
-                const options = datalist.options;
-                
-                for(let i=0; i<options.length; i++) {
-                    if(options[i].value === input.value) {
-                        foundId = options[i].getAttribute('data-id');
-                        break;
-                    }
-                }
-                
-                hidden.value = foundId;
-                
-                if (foundId === "") {
-                    input.setCustomValidity("Debe seleccionar un material válido de la lista.");
-                } else {
-                    input.setCustomValidity(""); 
-                    // Si encontró el material y estamos en el modal de entrada, buscar precio
-                    if (hiddenId === 'hiddenMaterial_entrada') {
-                        buscarPrecioDevolucion();
-                    }
-                }
-            });
-        }
-        
-        inicializarBusquedaMaterial('busquedaMaterialEntrada', 'hiddenMaterial_entrada');
-        inicializarBusquedaMaterial('busquedaMaterialSalida', 'hiddenMaterial_salida');
+        crearBuscadorMaterial('busquedaMaterialEntrada', 'hiddenMaterial_entrada', 'dropdownMaterialEntrada', { materiales: materialesBusqueda });
+        crearBuscadorMaterial('busquedaMaterialSalida', 'hiddenMaterial_salida', 'dropdownMaterialSalida', { materiales: materialesBusqueda });
+        crearBuscadorMaterial('busquedaMaterialDevolucion', 'hiddenMaterial_devolucion', 'dropdownMaterialDevolucion', {
+            materiales: materialesBusqueda,
+            onSeleccionar: function() { buscarPrecioDevolucion(); }
+        });
 
         // --- LÓGICA DE VÍNCULOS ---
         let contextMenuVinculoData = null;
@@ -612,42 +606,8 @@
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('fechaEntrada').value = today;
         document.getElementById('fechaFacturaEntrada').value = today;
+        document.getElementById('fechaDevolucion').value = today;
         document.getElementById('fechaSalida').value = today;
-
-        // --- LÓGICA DE BÚSQUEDA Y SELECCIÓN DE MATERIALES ---
-        function inicializarBusquedaMaterial(inputId, hiddenId) {
-            const input = document.getElementById(inputId);
-            const hidden = document.getElementById(hiddenId);
-            const datalist = document.getElementById('listaMateriales');
-            
-            if(!input || !hidden || !datalist) return;
-
-            // Inicializamos como inválido hasta que se seleccione algo válido
-            input.setCustomValidity("Debe seleccionar un material de la lista.");
-
-            input.addEventListener('input', function() {
-                let foundId = "";
-                const options = datalist.options;
-                
-                for(let i=0; i<options.length; i++) {
-                    if(options[i].value === input.value) {
-                        foundId = options[i].getAttribute('data-id');
-                        break;
-                    }
-                }
-                
-                hidden.value = foundId;
-                
-                if (foundId === "") {
-                    input.setCustomValidity("Debe seleccionar un material válido de la lista.");
-                } else {
-                    input.setCustomValidity(""); // Es válido
-                }
-            });
-        }
-        
-        inicializarBusquedaMaterial('busquedaMaterialEntrada', 'hiddenMaterial_entrada');
-        inicializarBusquedaMaterial('busquedaMaterialSalida', 'hiddenMaterial_salida');
 
         function toggleDescripcion(event, boton) {
             // Evita que el clic se propague y cierre el popover inmediatamente

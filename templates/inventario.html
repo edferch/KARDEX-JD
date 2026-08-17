@@ -33,7 +33,11 @@
 
     <div style="margin: 20px 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
         <div style="display: flex; gap: 10px; align-items: center; min-width: 300px; flex: 1;">
-            <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Buscar por nombre de material..." style="flex: 1; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; max-width: 400px;">
+            <div class="buscador-input-wrapper">
+                <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Buscar por código, nombre o descripción..." style="padding: 8px 34px 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;">
+                <button type="button" class="buscador-clear-btn" id="searchClear" onclick="limpiarBusqueda()" title="Limpiar búsqueda">✕</button>
+            </div>
+            <span class="buscador-contador" id="searchContador"></span>
             <button onclick="document.getElementById('searchInput').focus()" class="btn btn-secundario" style="padding: 8px 14px;" title="Atajo: Ctrl + F">🔍 Buscar</button>
         </div>
     </div>
@@ -43,6 +47,7 @@
             <thead>
                 <tr>
                     <th class="hdr-gris col-texto">ID</th>
+                    <th class="hdr-gris col-texto">Código</th>
                     <th class="hdr-gris col-texto">Nombre</th>
                     <th class="hdr-gris col-texto">Descripción</th>
                     <th class="hdr-gris col-texto">Grupo</th>
@@ -61,6 +66,7 @@
                 <tr onclick="seleccionarMaterial(this)" style="cursor: pointer; transition: background-color 0.2s;"
                     data-id="{{ mat['id'] }}"
                     data-nombre="{{ mat['nombre'] }}"
+                    data-codigo="{{ mat['codigo'] or '' }}"
                     data-descripcion="{{ mat['descripcion'] or '' }}"
                     data-tipo="{{ mat['tipo_material'] }}"
                     data-metrico="{{ mat['numero_metrico'] or '' }}"
@@ -74,6 +80,7 @@
                     data-cant="{{ mat['cantidad_inicial'] }}"
                     data-precio="{{ mat['precio_unitario'] }}">
                     <td class="col-texto">{{ loop.index }}</td>
+                    <td class="col-texto">{{ mat['codigo'] or '' }}</td>
                     <td class="col-texto">
                         {% if mat['drive_link'] %}
                             <a href="{{ mat['drive_link'] }}" target="_blank" title="Abrir enlace de Drive" style="color: #2563eb; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
@@ -96,11 +103,11 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="12" style="padding: 20px; text-align: center; color: #7f8c8d;">No hay materiales registrados en el inventario.</td>
+                    <td colspan="13" style="padding: 20px; text-align: center; color: #7f8c8d;">No hay materiales registrados en el inventario.</td>
                 </tr>
                 {% endfor %}
                 <tr id="no-results" style="display: none;">
-                    <td colspan="12" style="padding: 20px; text-align: center; color: #7f8c8d; background-color: #f8fafc;">
+                    <td colspan="13" style="padding: 20px; text-align: center; color: #7f8c8d; background-color: #f8fafc;">
                         No se encontraron resultados para su búsqueda.
                     </td>
                 </tr>
@@ -114,13 +121,14 @@
         <h3 style="margin-top: 0; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; color: #1e293b;">Nuevo Material</h3>
         <form method="POST" action="/inventario" autocomplete="off">
             <div class="form-grupo">
+                <label>Código:</label> <input type="text" name="codigo">
                 <label>Nombre:</label> <input type="text" name="nombre" required>
                 <label>Descripción:</label>
                 <textarea name="descripcion" rows="3" style="padding: 12px 16px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; box-sizing: border-box; font-size: 15px; color: #1e293b; background-color: #f8fafc; transition: all 0.2s; font-family: inherit;"></textarea>
-                
-                <label>Grupo (Categoría):</label> 
+
+                <label>Grupo (Categoría):</label>
                 <div style="display: flex; gap: 8px;">
-                    <select name="tipo_material" id="selectGrupo" required style="flex: 1;"> 
+                    <select name="tipo_material" id="selectGrupo" required style="flex: 1;">
                         <option value="">Seleccione un grupo...</option>
                         {% for grupo in grupos %} <option value="{{ grupo['nombre'] }}" data-id="{{ grupo['id'] }}">{{ grupo['nombre'] }}</option> {% endfor %} 
                     </select>
@@ -162,6 +170,7 @@
         <form method="POST" action="/editar_material" autocomplete="off">
             <input type="hidden" name="id" id="edit_id">
             <div class="form-grupo">
+                <label>Código:</label> <input type="text" name="codigo" id="edit_codigo">
                 <label>Nombre:</label> <input type="text" name="nombre" id="edit_nombre" required>
                 <label>Descripción:</label>
                 <textarea name="descripcion" id="edit_descripcion" rows="3" style="padding: 12px 16px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; box-sizing: border-box; font-size: 15px; color: #1e293b; background-color: #f8fafc; transition: all 0.2s; font-family: inherit;"></textarea>
@@ -347,6 +356,7 @@
             
             document.getElementById('edit_id').value = materialSeleccionado.getAttribute('data-id');
             document.getElementById('edit_nombre').value = materialSeleccionado.getAttribute('data-nombre');
+            document.getElementById('edit_codigo').value = materialSeleccionado.getAttribute('data-codigo');
             document.getElementById('edit_descripcion').value = materialSeleccionado.getAttribute('data-descripcion');
             document.getElementById('edit_tipo_material').value = materialSeleccionado.getAttribute('data-tipo');
             document.getElementById('edit_fuente').value = materialSeleccionado.getAttribute('data-fuente');
@@ -714,28 +724,59 @@
             } catch (e) { alert("Error de conexión al eliminar el proveedor."); }
         }
 
+        function normalizeText(text) {
+            if (!text) return '';
+            return text.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+        }
+
         function filterTable() {
             const input = document.getElementById('searchInput');
-            const filter = input.value.toLowerCase();
+            const filter = normalizeText(input.value);
             const tbody = document.getElementById('tabla-materiales');
             const rows = tbody.getElementsByTagName('tr');
             let visibleRows = 0;
+            let totalRows = 0;
+            let firstMatch = null;
+
+            document.getElementById('searchClear').style.display = input.value ? 'inline-flex' : 'none';
 
             for (let i = 0; i < rows.length; i++) {
                 if (rows[i].id === 'no-results') continue;
+                rows[i].classList.remove('search-highlight');
 
-                const nameCell = rows[i].getElementsByTagName("td")[1];
-                if (nameCell) {
-                    const txtValue = nameCell.textContent || nameCell.innerText;
-                    if (txtValue.toLowerCase().indexOf(filter) > -1) {
-                        rows[i].style.display = "";
-                        visibleRows++;
-                    } else {
-                        rows[i].style.display = "none";
-                    }
+                const codigoCell = rows[i].getElementsByTagName("td")[1];
+                const nombreCell = rows[i].getElementsByTagName("td")[2];
+                const descCell = rows[i].getElementsByTagName("td")[3];
+                if (!nombreCell) continue; // fila de "no hay materiales registrados"
+
+                totalRows++;
+                const codigoText = normalizeText(codigoCell ? codigoCell.textContent || codigoCell.innerText : '');
+                const nombreText = normalizeText(nombreCell ? nombreCell.textContent || nombreCell.innerText : '');
+                const descText = normalizeText(descCell ? descCell.textContent || descCell.innerText : '');
+
+                if (filter === '' || codigoText.includes(filter) || nombreText.includes(filter) || descText.includes(filter)) {
+                    rows[i].style.display = "";
+                    visibleRows++;
+                    if (filter !== '' && !firstMatch) firstMatch = rows[i];
+                } else {
+                    rows[i].style.display = "none";
                 }
             }
+
+            if (firstMatch) {
+                firstMatch.classList.add('search-highlight');
+                firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+
             document.getElementById('no-results').style.display = visibleRows > 0 ? 'none' : '';
+            document.getElementById('searchContador').textContent = filter === '' ? '' : (visibleRows + ' de ' + totalRows + ' materiales');
+        }
+
+        function limpiarBusqueda() {
+            const input = document.getElementById('searchInput');
+            input.value = '';
+            input.focus();
+            filterTable();
         }
 
         document.addEventListener('keydown', function(event) {

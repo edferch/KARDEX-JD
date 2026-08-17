@@ -23,8 +23,12 @@
     <div class="container">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
             <h2>Consulta de Stock</h2>
-            <div>
-                <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Buscar por nombre o descripción..." style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; min-width: 300px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="buscador-input-wrapper" style="min-width: 300px;">
+                    <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Buscar por nombre, código o descripción..." style="padding: 8px 34px 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;">
+                    <button type="button" class="buscador-clear-btn" id="searchClear" onclick="limpiarBusqueda()" title="Limpiar búsqueda">✕</button>
+                </div>
+                <span class="buscador-contador" id="searchContador"></span>
             </div>
         </div>
     
@@ -32,6 +36,7 @@
             <table class="kardex-tabla">
                 <thead>
                     <tr>
+                        <th class="hdr-gris col-texto">Código</th>
                         <th class="hdr-gris col-texto">Nombre</th>
                         <th class="hdr-gris col-texto">Descripción</th>
                         <th class="hdr-naranja">Stock Actual</th>
@@ -40,17 +45,18 @@
                 <tbody id="tabla-materiales">
                     {% for mat in materiales %}
                     <tr>
+                        <td class="col-texto">{{ mat['codigo'] or '' }}</td>
                         <td class="col-texto"><strong>{{ mat['nombre'] }}</strong></td>
                         <td class="col-texto">{{ mat['descripcion'] or '' }}</td>
                         <td class="celda-naranja" style="font-size: 16px; font-weight: bold; text-align: center;">{{ mat['stock'] }}</td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="3" style="padding: 20px; text-align: center; color: #7f8c8d;">No hay materiales para mostrar.</td>
+                        <td colspan="4" style="padding: 20px; text-align: center; color: #7f8c8d;">No hay materiales para mostrar.</td>
                     </tr>
                     {% endfor %}
                     <tr id="no-results" style="display: none;">
-                        <td colspan="3" style="padding: 20px; text-align: center; color: #7f8c8d; background-color: #f8fafc;">
+                        <td colspan="4" style="padding: 20px; text-align: center; color: #7f8c8d; background-color: #f8fafc;">
                             No se encontraron resultados para su búsqueda.
                         </td>
                     </tr>
@@ -71,8 +77,11 @@
                 const tbody = document.getElementById('tabla-materiales');
                 const rows = tbody.getElementsByTagName('tr');
                 let visibleRows = 0;
+                let totalRows = 0;
                 let firstMatch = null;
-    
+
+                document.getElementById('searchClear').style.display = input.value ? 'inline-flex' : 'none';
+
                 // 1. Limpiar resaltados anteriores
                 for (let row of rows) {
                     if (row.id !== 'no-results') {
@@ -86,6 +95,7 @@
                         if (row.id !== 'no-results') row.style.display = "";
                     }
                     document.getElementById('no-results').style.display = 'none';
+                    document.getElementById('searchContador').textContent = '';
                     return;
                 }
 
@@ -93,15 +103,19 @@
                 for (let i = 0; i < rows.length; i++) {
                     const row = rows[i];
                     if (row.id === 'no-results') continue;
-    
-                    const nameCell = row.getElementsByTagName("td")[0];
-                    const descCell = row.getElementsByTagName("td")[1];
-                    
+
+                    const codigoCell = row.getElementsByTagName("td")[0];
+                    const nameCell = row.getElementsByTagName("td")[1];
+                    const descCell = row.getElementsByTagName("td")[2];
+                    if (!nameCell) continue; // fila de "no hay materiales"
+
+                    totalRows++;
                     const nameText = normalizeText(nameCell ? nameCell.textContent || nameCell.innerText : '');
+                    const codigoText = normalizeText(codigoCell ? codigoCell.textContent || codigoCell.innerText : '');
                     const descText = normalizeText(descCell ? descCell.textContent || descCell.innerText : '');
-                    
+
                     // Usamos .includes() que es más semántico que indexOf > -1
-                    if (nameText.includes(filter) || descText.includes(filter)) {
+                    if (nameText.includes(filter) || codigoText.includes(filter) || descText.includes(filter)) {
                         row.style.display = "";
                         visibleRows++;
                         if (!firstMatch) firstMatch = row; // Guardamos la primera fila que coincide
@@ -117,6 +131,14 @@
                 }
 
                 document.getElementById('no-results').style.display = visibleRows > 0 ? 'none' : '';
+                document.getElementById('searchContador').textContent = visibleRows + ' de ' + totalRows + ' materiales';
+            }
+
+            function limpiarBusqueda() {
+                const input = document.getElementById('searchInput');
+                input.value = '';
+                input.focus();
+                filterTable();
             }
     
             document.addEventListener('keydown', function(event) {

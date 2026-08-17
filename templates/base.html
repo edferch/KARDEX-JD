@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KARDEX JD</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="{{ url_for('static', filename='buscador-material.js') }}"></script>
 </head>
 <body>
     <header>
@@ -15,6 +16,7 @@
         <a href="/">Inicio</a>
         <a href="/reporte">Reportes</a>
         <a href="/inventario">Inventario</a>
+        {% if request.path != '/' %}<a href="/quote">Quote</a>{% endif %}
         <a href="/admin">Admin</a>
     </nav>
 
