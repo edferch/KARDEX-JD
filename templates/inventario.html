@@ -2,7 +2,7 @@
 
 {% block content %}
     <div style="display: flex; justify-content: space-between; align-items: center;">
-        <h2>Inventario</h2>
+        <h2>Inventario <span style="font-size: 15px; font-weight: 700; color: #4338ca; background-color: #e0e7ff; padding: 4px 12px; border-radius: 999px; vertical-align: middle;">{{ inventario_actual }}</span></h2>
         <div style="display: flex; gap: 10px;">
             <button id="btnEditar" onclick="abrirPanelEditar()" class="btn" style="display: none; background-color: #f59e0b; box-shadow: 0 4px 6px -1px rgba(245, 158, 11, 0.3);">✏️ Editar</button>
             <button id="btnEliminar" onclick="confirmarEliminacionMaterial()" class="btn btn-salida" style="display: none; box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.3);">🗑️ Eliminar</button>
@@ -43,27 +43,19 @@
     </div>
 
     <div class="kardex-tabla-contenedor">
-        <table class="kardex-tabla">
+        <table class="kardex-tabla tabla-inventario-compacta">
             <thead>
                 <tr>
-                    <th class="hdr-gris col-texto">ID</th>
+                    <th class="hdr-gris" style="width: 40px;"></th>
                     <th class="hdr-gris col-texto">Código</th>
                     <th class="hdr-gris col-texto">Nombre</th>
-                    <th class="hdr-gris col-texto">Descripción</th>
-                    <th class="hdr-gris col-texto">Grupo</th>
-                    <th class="hdr-gris col-texto">No. Métrico</th>
-                    <th class="hdr-gris col-texto">Origen</th>
-                    <th class="hdr-gris col-texto">Fuente</th>
-                    <th class="hdr-gris col-texto">Proveedor</th>
-                    <th class="hdr-gris col-texto">Presentación</th>
-                    <th class="hdr-gris col-texto">Unidad</th>
                     <th class="hdr-gris">Exist. Actual</th>
                     <th class="hdr-gris">Costo Prom. Actual</th>
                 </tr>
             </thead>
             <tbody id="tabla-materiales">
                 {% for mat in materiales %}
-                <tr onclick="seleccionarMaterial(this)" style="cursor: pointer; transition: background-color 0.2s;"
+                <tr class="fila-material" onclick="seleccionarMaterial(this)" style="cursor: pointer; transition: background-color 0.2s;"
                     data-id="{{ mat['id'] }}"
                     data-nombre="{{ mat['nombre'] }}"
                     data-codigo="{{ mat['codigo'] or '' }}"
@@ -79,35 +71,43 @@
                     data-unidad="{{ mat['unidad'] or '' }}"
                     data-cant="{{ mat['cantidad_inicial'] }}"
                     data-precio="{{ mat['precio_unitario'] }}">
-                    <td class="col-texto">{{ loop.index }}</td>
+                    <td class="col-texto">
+                        <button type="button" class="btn-expandir-fila" onclick="event.stopPropagation(); toggleDetalleMaterial({{ mat['id'] }});" title="Ver más detalles" id="toggle-{{ mat['id'] }}">▶</button>
+                    </td>
                     <td class="col-texto">{{ mat['codigo'] or '' }}</td>
                     <td class="col-texto">
                         {% if mat['drive_link'] %}
-                            <a href="{{ mat['drive_link'] }}" target="_blank" title="Abrir enlace de Drive" style="color: #2563eb; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                            <a href="{{ mat['drive_link'] }}" target="_blank" title="Abrir enlace de Drive" style="color: #2563eb; text-decoration: none;" onclick="event.stopPropagation();" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
                                 <strong>{{ mat['nombre'] }}</strong>
                             </a>
                         {% else %}
                             <strong>{{ mat['nombre'] }}</strong>
                         {% endif %}
                     </td>
-                    <td class="col-texto">{{ mat['descripcion'] }}</td>
-                    <td class="col-texto">{{ mat['tipo_material'] }}</td>
-                    <td class="col-texto">{{ mat['numero_metrico'] }}</td>
-                    <td class="col-texto">{{ mat['origen'] }}</td>
-                    <td class="col-texto">{{ mat['fuente'] }}</td>
-                    <td class="col-texto">{{ mat['empresa'] }}</td>
-                    <td class="col-texto">{{ mat['presentacion'] }}</td>
-                    <td class="col-texto">{{ mat['unidad'] }}</td>
                     <td>{{ mat['stock_actual'] }}</td>
                     <td>Q {{ "%.2f"|format(mat['costo_promedio_actual']) }}</td>
                 </tr>
+                <tr class="fila-detalle" id="detalle-{{ mat['id'] }}" style="display: none;">
+                    <td colspan="5">
+                        <div class="detalle-material-grid">
+                            <div><span>Grupo</span><strong>{{ mat['tipo_material'] or '-' }}</strong></div>
+                            <div><span>No. Métrico</span><strong>{{ mat['numero_metrico'] or '-' }}</strong></div>
+                            <div><span>Origen</span><strong>{{ mat['origen'] or '-' }}</strong></div>
+                            <div><span>Fuente</span><strong>{{ mat['fuente'] or '-' }}</strong></div>
+                            <div><span>Proveedor</span><strong>{{ mat['empresa'] or '-' }}</strong></div>
+                            <div><span>Presentación</span><strong>{{ mat['presentacion'] or '-' }}</strong></div>
+                            <div><span>Unidad</span><strong>{{ mat['unidad'] or '-' }}</strong></div>
+                            <div class="detalle-material-desc"><span>Descripción</span><strong>{{ mat['descripcion'] or '-' }}</strong></div>
+                        </div>
+                    </td>
+                </tr>
                 {% else %}
                 <tr>
-                    <td colspan="13" style="padding: 20px; text-align: center; color: #7f8c8d;">No hay materiales registrados en el inventario.</td>
+                    <td colspan="5" style="padding: 20px; text-align: center; color: #7f8c8d;">No hay materiales registrados en el inventario.</td>
                 </tr>
                 {% endfor %}
                 <tr id="no-results" style="display: none;">
-                    <td colspan="13" style="padding: 20px; text-align: center; color: #7f8c8d; background-color: #f8fafc;">
+                    <td colspan="5" style="padding: 20px; text-align: center; color: #7f8c8d; background-color: #f8fafc;">
                         No se encontraron resultados para su búsqueda.
                     </td>
                 </tr>
@@ -118,7 +118,7 @@
     <div class="overlay" id="fondoOscuro" onclick="cerrarPanel(); cerrarPanelEditar();"></div>
     
     <div class="panel-lateral" id="miPanel">
-        <h3 style="margin-top: 0; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; color: #1e293b;">Nuevo Material</h3>
+        <h3 style="margin-top: 0; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; color: #1e293b;">Nuevo Material <span style="font-size: 13px; font-weight: 700; color: #4338ca; background-color: #e0e7ff; padding: 3px 10px; border-radius: 999px;">Inventario {{ inventario_actual }}</span></h3>
         <form method="POST" action="/inventario" autocomplete="off">
             <div class="form-grupo">
                 <label>Código:</label> <input type="text" name="codigo">
@@ -331,14 +331,26 @@
     </div>
 
     <script>
+        // --- EXPANDIR/COLAPSAR DETALLE DE UN MATERIAL ---
+        function toggleDetalleMaterial(id) {
+            const detalle = document.getElementById('detalle-' + id);
+            const boton = document.getElementById('toggle-' + id);
+            if (!detalle || !boton) return;
+
+            const abrir = detalle.style.display === 'none';
+            detalle.style.display = abrir ? 'table-row' : 'none';
+            boton.classList.toggle('abierto', abrir);
+            boton.textContent = '▶';
+        }
+
         // --- SELECCIÓN DE MATERIAL PARA EDITAR/ELIMINAR ---
         let materialSeleccionado = null;
 
         function seleccionarMaterial(fila) {
-            document.querySelectorAll('.kardex-tabla tbody tr').forEach(function(tr) {
+            document.querySelectorAll('.kardex-tabla tbody tr.fila-material').forEach(function(tr) {
                 tr.style.backgroundColor = '';
             });
-            
+
             if (materialSeleccionado === fila) {
                 materialSeleccionado = null;
                 document.getElementById('btnEditar').style.display = 'none';
@@ -733,35 +745,32 @@
             const input = document.getElementById('searchInput');
             const filter = normalizeText(input.value);
             const tbody = document.getElementById('tabla-materiales');
-            const rows = tbody.getElementsByTagName('tr');
+            const filas = tbody.querySelectorAll('tr.fila-material');
             let visibleRows = 0;
             let totalRows = 0;
             let firstMatch = null;
 
             document.getElementById('searchClear').style.display = input.value ? 'inline-flex' : 'none';
 
-            for (let i = 0; i < rows.length; i++) {
-                if (rows[i].id === 'no-results') continue;
-                rows[i].classList.remove('search-highlight');
-
-                const codigoCell = rows[i].getElementsByTagName("td")[1];
-                const nombreCell = rows[i].getElementsByTagName("td")[2];
-                const descCell = rows[i].getElementsByTagName("td")[3];
-                if (!nombreCell) continue; // fila de "no hay materiales registrados"
-
+            filas.forEach(function(fila) {
+                fila.classList.remove('search-highlight');
                 totalRows++;
-                const codigoText = normalizeText(codigoCell ? codigoCell.textContent || codigoCell.innerText : '');
-                const nombreText = normalizeText(nombreCell ? nombreCell.textContent || nombreCell.innerText : '');
-                const descText = normalizeText(descCell ? descCell.textContent || descCell.innerText : '');
 
-                if (filter === '' || codigoText.includes(filter) || nombreText.includes(filter) || descText.includes(filter)) {
-                    rows[i].style.display = "";
+                // Busca en TODOS los datos del material (código, nombre, descripción, grupo, origen, fuente, proveedor, etc.)
+                const searchable = normalizeText(Object.values(fila.dataset).join(' '));
+                const detalle = document.getElementById('detalle-' + fila.dataset.id);
+
+                if (filter === '' || searchable.includes(filter)) {
+                    fila.style.display = "";
                     visibleRows++;
-                    if (filter !== '' && !firstMatch) firstMatch = rows[i];
+                    if (filter !== '' && !firstMatch) firstMatch = fila;
                 } else {
-                    rows[i].style.display = "none";
+                    fila.style.display = "none";
+                    if (detalle) detalle.style.display = 'none';
+                    const boton = document.getElementById('toggle-' + fila.dataset.id);
+                    if (boton) boton.classList.remove('abierto');
                 }
-            }
+            });
 
             if (firstMatch) {
                 firstMatch.classList.add('search-highlight');

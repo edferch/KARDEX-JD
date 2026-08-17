@@ -180,3 +180,35 @@ nav a:hover { background-color: #f1f5f9; color: #2563eb; transform: translateY(-
 .buscador-clear-btn { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #94a3b8; font-size: 16px; line-height: 1; padding: 5px 7px; border-radius: 6px; display: none; }
 .buscador-clear-btn:hover { color: #ef4444; background-color: #fef2f2; }
 .buscador-contador { font-size: 12px; color: #64748b; font-weight: 600; white-space: nowrap; }
+
+/* ============================================================ */
+/* --- SELECTOR DE INVENTARIO (A / B / C) --- */
+/* ============================================================ */
+
+.inv-switcher-bar { background-color: #4338ca; padding: 10px 20px; display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; box-shadow: 0 2px 4px -1px rgba(0,0,0,0.1); }
+.inv-switcher-label { color: #e0e7ff; font-size: 13px; font-weight: 700; letter-spacing: 0.3px; }
+.inv-switcher { display: flex; gap: 4px; background-color: rgba(255,255,255,0.12); padding: 4px; border-radius: 10px; }
+.inv-switcher-btn { color: #e0e7ff; text-decoration: none; padding: 7px 18px; border-radius: 7px; font-weight: 700; font-size: 13px; transition: all 0.2s ease; }
+.inv-switcher-btn:hover { background-color: rgba(255,255,255,0.15); color: #ffffff; }
+.inv-switcher-btn.activo { background-color: #ffffff; color: #4338ca; box-shadow: 0 2px 4px -1px rgba(0,0,0,0.15); }
+
+@media (max-width: 640px) {
+    .inv-switcher-bar { padding: 10px 14px; }
+    .inv-switcher-btn { padding: 6px 12px; font-size: 12px; }
+}
+
+/* ============================================================ */
+/* --- INVENTARIO: TABLA COMPACTA CON DETALLE EXPANDIBLE --- */
+/* ============================================================ */
+
+.tabla-inventario-compacta { min-width: 0; }
+.btn-expandir-fila { background: none; border: none; cursor: pointer; font-size: 12px; color: #64748b; padding: 6px 8px; border-radius: 6px; transition: all 0.2s ease; display: inline-block; }
+.btn-expandir-fila:hover { background-color: #eff6ff; color: #3b82f6; }
+.btn-expandir-fila.abierto { transform: rotate(90deg); color: #3b82f6; }
+
+.fila-detalle td { background-color: #f8fafc; padding: 16px 20px !important; }
+.detalle-material-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+.detalle-material-grid > div { display: flex; flex-direction: column; gap: 3px; }
+.detalle-material-grid span { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: #94a3b8; }
+.detalle-material-grid strong { font-size: 14px; color: #1e293b; font-weight: 600; }
+.detalle-material-desc { grid-column: 1 / -1; }

@@ -21,6 +21,7 @@
             <li><strong>Unidad de Medida:</strong> (Texto, Opcional)</li>
             <li><strong>Existencia Inicial Física:</strong> (Número, <strong>Obligatorio</strong>)</li>
             <li><strong>Costo Unitario Inicial (Q):</strong> (Número, <strong>Obligatorio</strong>)</li>
+            <li><strong>Código:</strong> (Texto, Opcional)</li>
         </ol>
         <p style="font-size: 12px; color: #64748b; background-color: #f8fafc; padding: 10px; border-radius: 6px;">
             <strong>Nota:</strong> Las filas que no contengan los datos obligatorios o tengan un formato incorrecto en las columnas numéricas serán omitidas. Si un 'Grupo', 'Fuente' o 'Proveedor' no existe en el sistema, <strong>será creado automáticamente</strong> durante la carga.
@@ -28,7 +29,7 @@
     </div>
 
     <div class="card" style="max-width: 800px; margin: 30px auto; text-align: center;">
-        <form method="POST" enctype="multipart/form-data" action="{{ url_for('cargar_excel') }}">
+        <form method="POST" enctype="multipart/form-data" action="{{ url_for('excel_bp.cargar_excel') }}">
             <div class="form-grupo">
                 <label for="file-upload" class="btn" style="cursor: pointer;">Seleccionar Archivo Excel (.xlsx)</label>
                 <input id="file-upload" type="file" name="archivo_excel" accept=".xlsx" required style="display: none;" onchange="document.getElementById('file-name').textContent = this.files[0].name">
