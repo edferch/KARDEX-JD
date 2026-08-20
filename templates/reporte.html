@@ -52,22 +52,22 @@
 
                 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                     <p style="margin:0; font-size:12px; color:#64748b; font-weight:800; letter-spacing: 0.5px;">SALDO ANTERIOR</p>
-                    <h3 style="margin:8px 0 0 0; color:#1e293b; font-size: 24px;">{{ reporte_datos.filas[0]['saldo_cant'] }}</h3>
+                    <h3 style="margin:8px 0 0 0; color:#1e293b; font-size: 24px;">{{ "{:,.2f}".format(reporte_datos.filas[0]['saldo_cant']) }}</h3>
                 </div>
 
                 <div style="background-color: #ecfdf5; border: 1px solid #d1fae5; border-left: 4px solid #10b981; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                     <p style="margin:0; font-size:12px; color:#065f46; font-weight:800; letter-spacing: 0.5px;">TOTAL ENTRADAS</p>
-                    <h3 style="margin:8px 0 0 0; color:#059669; font-size: 24px;">+ {{ total_entradas }}</h3>
+                    <h3 style="margin:8px 0 0 0; color:#059669; font-size: 24px;">+ {{ "{:,.2f}".format(total_entradas) }}</h3>
                 </div>
 
                 <div style="background-color: #eff6ff; border: 1px solid #dbeafe; border-left: 4px solid #3b82f6; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                     <p style="margin:0; font-size:12px; color:#1e3a8a; font-weight:800; letter-spacing: 0.5px;">TOTAL SALIDAS</p>
-                    <h3 style="margin:8px 0 0 0; color:#2563eb; font-size: 24px;">- {{ total_salidas }}</h3>
+                    <h3 style="margin:8px 0 0 0; color:#2563eb; font-size: 24px;">- {{ "{:,.2f}".format(total_salidas) }}</h3>
                 </div>
 
                 <div style="background-color: #fff7ed; border: 1px solid #ffedd5; border-left: 4px solid #ea580c; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                     <p style="margin:0; font-size:12px; color:#9a3412; font-weight:800; letter-spacing: 0.5px;">SALDO FINAL</p>
-                    <h3 style="margin:8px 0 0 0; color:#ea580c; font-size: 24px;">{{ saldo_final }}</h3>
+                    <h3 style="margin:8px 0 0 0; color:#ea580c; font-size: 24px;">{{ "{:,.2f}".format(saldo_final) }}</h3>
                 </div>
             </div>
 
@@ -103,17 +103,17 @@
                             <td class="col-texto" style="white-space: nowrap;">{{ fila['fecha'] }}</td>
                             <td class="col-texto"><strong>{{ fila['detalle'] }}</strong></td>
 
-                            <td class="celda-verde">{% if fila['ing_cant'] != '' %}{{ fila['ing_cant'] }}{% endif %}</td>
-                            <td class="celda-verde">{% if fila['ing_costo'] != '' %}Q {{ "%.2f"|format(fila['ing_costo']) }}{% endif %}</td>
-                            <td class="celda-verde">{% if fila['ing_total'] != '' %}Q {{ "%.2f"|format(fila['ing_total']) }}{% endif %}</td>
+                            <td class="celda-verde">{% if fila['ing_cant'] != '' %}{{ "{:,.2f}".format(fila['ing_cant']) }}{% endif %}</td>
+                            <td class="celda-verde">{% if fila['ing_costo'] != '' %}Q {{ "{:,.2f}".format(fila['ing_costo']) }}{% endif %}</td>
+                            <td class="celda-verde">{% if fila['ing_total'] != '' %}Q {{ "{:,.2f}".format(fila['ing_total']) }}{% endif %}</td>
 
-                            <td class="celda-azul">{% if fila['sal_cant'] != '' %}{{ fila['sal_cant'] }}{% endif %}</td>
-                            <td class="celda-azul">{% if fila['sal_costo'] != '' %}Q {{ "%.2f"|format(fila['sal_costo']) }}{% endif %}</td>
-                            <td class="celda-azul">{% if fila['sal_total'] != '' %}Q {{ "%.2f"|format(fila['sal_total']) }}{% endif %}</td>
+                            <td class="celda-azul">{% if fila['sal_cant'] != '' %}{{ "{:,.2f}".format(fila['sal_cant']) }}{% endif %}</td>
+                            <td class="celda-azul">{% if fila['sal_costo'] != '' %}Q {{ "{:,.2f}".format(fila['sal_costo']) }}{% endif %}</td>
+                            <td class="celda-azul">{% if fila['sal_total'] != '' %}Q {{ "{:,.2f}".format(fila['sal_total']) }}{% endif %}</td>
 
-                            <td class="celda-naranja" style="font-weight: bold;">{{ fila['saldo_cant'] }}</td>
-                            <td class="celda-naranja">Q {{ "%.2f"|format(fila['saldo_costo']) }}</td>
-                            <td class="celda-naranja" style="font-weight: bold;">Q {{ "%.2f"|format(fila['saldo_total']) }}</td>
+                            <td class="celda-naranja" style="font-weight: bold;">{{ "{:,.2f}".format(fila['saldo_cant']) }}</td>
+                            <td class="celda-naranja">Q {{ "{:,.2f}".format(fila['saldo_costo']) }}</td>
+                            <td class="celda-naranja" style="font-weight: bold;">Q {{ "{:,.2f}".format(fila['saldo_total']) }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -182,7 +182,7 @@
                                 </td>
                                 <td class="col-texto">{{ r.documento or '' }}</td>
                                 <td class="col-texto">{{ r.numero_documento or '' }}</td>
-                                <td class="celda-naranja" style="text-align: right;">{{ "{:,}".format(r.cantidad) }}</td>
+                                <td class="celda-naranja" style="text-align: right;">{{ "{:,.2f}".format(r.cantidad) }}</td>
                                 <td class="celda-amarilla" style="text-align: right;">Q {{ "{:,.2f}".format(r.precio_unitario) }}</td>
                                 <td class="celda-verde" style="text-align: right; font-weight: bold;">Q {{ "{:,.2f}".format(r.total) }}</td>
                             </tr>

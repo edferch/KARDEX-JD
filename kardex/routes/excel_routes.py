@@ -8,7 +8,7 @@ from flask import Blueprint, request, redirect, url_for, render_template, flash,
 from io import BytesIO
 
 from ..db import get_db_connection
-from ..inventarios import obtener_inventario_actual
+from ..inventarios import INVENTARIOS, obtener_inventario_actual
 from ..logic import preparar_datos_kardex
 
 excel_bp = Blueprint('excel_bp', __name__)
@@ -55,6 +55,8 @@ def exportar_inventario():
         for col_num, cell in enumerate(ws[ws.max_row], 1):
             cell.alignment = alignment_right if col_num in columnas_numericas else alignment_left
             cell.border = border_thin
+            if col_num in columnas_numericas:
+                cell.number_format = '#,##0.00'
     # Ajustar ancho de las columnas automáticamente
     for col in ws.columns:
         max_length = 0
@@ -91,101 +93,152 @@ def exportar_kardex():
         except Exception:
             nombre_archivo = "Kardex_General.xlsx"
 
+    # Se calcula el kardex de los 3 inventarios (A, B, C), cada uno en su propia hoja,
+    # más una hoja de resumen que totaliza compras, salidas y valor actual entre todos.
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM materiales WHERE inventario = ? ORDER BY nombre ASC', (obtener_inventario_actual(),))
-    materiales = cursor.fetchall()
 
-    movimientos_por_material = {}
-    for mat in materiales:
-        cursor.execute('SELECT * FROM movimientos WHERE material_id = ? ORDER BY fecha ASC, id ASC', (mat['id'],))
-        movimientos_por_material[mat['id']] = cursor.fetchall()
+    datos_por_inventario = {}
+    for letra in INVENTARIOS:
+        cursor.execute('SELECT * FROM materiales WHERE inventario = ? ORDER BY nombre ASC', (letra,))
+        materiales = cursor.fetchall()
 
-    materiales_kardex, _, _, _ = preparar_datos_kardex(materiales, movimientos_por_material, mes_filtro)
+        movimientos_por_material = {}
+        for mat in materiales:
+            cursor.execute('SELECT * FROM movimientos WHERE material_id = ? ORDER BY fecha ASC, id ASC', (mat['id'],))
+            movimientos_por_material[mat['id']] = cursor.fetchall()
+
+        materiales_kardex, _, _, totales = preparar_datos_kardex(materiales, movimientos_por_material, mes_filtro)
+        datos_por_inventario[letra] = {'materiales': materiales_kardex, 'totales': totales}
 
     cursor.close()
     conn.close()
 
     wb = openpyxl.Workbook()
-    ws_kardex = wb.active
-    ws_kardex.title = "Kardex Detallado"
 
     fill_gris = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
     fill_amarillo = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
     fill_verde = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
     fill_azul = PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")
     fill_naranja = PatternFill(start_color="FFEDD5", end_color="FFEDD5", fill_type="solid")
+    fill_total = PatternFill(start_color="E2E8F0", end_color="E2E8F0", fill_type="solid")
     bold_font = Font(bold=True)
     border = Border(left=Side(style='thin', color='CBD5E1'), right=Side(style='thin', color='CBD5E1'), top=Side(style='thin', color='CBD5E1'), bottom=Side(style='thin', color='CBD5E1'))
     alignment_center = Alignment(horizontal='center', vertical='center')
+    alignment_right = Alignment(horizontal='right', vertical='center')
 
-    headers = [
-        'No.', 'Nombre', 'Grupo',
-        'Inicial Cant.', 'Inicial Costo', 'Inicial Total',
-        'Entradas Cant.', 'Entradas Costo', 'Entradas Total',
-        'Salidas Cant.', 'Salidas Costo', 'Salidas Total',
-        'Actual Cant.', 'Actual Costo', 'Actual Total'
-    ]
-    ws_kardex.append(headers)
+    def _autoajustar_columnas(ws):
+        for col in ws.columns:
+            max_length = 0
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except Exception:
+                    pass
+            ws.column_dimensions[col[0].column_letter].width = min(max_length + 2, 40)
 
-    for cell in ws_kardex[1]:
+    # --- HOJA "Resumen General": total comprado, total salido y valor actual en materias primas ---
+    ws_resumen = wb.active
+    ws_resumen.title = "Resumen General"
+    ws_resumen.append(['Inventario', 'Cant. Comprada', 'Total Comprado (Q)', 'Cant. Salida', 'Total Salido (Q)', 'Cant. Actual', 'Valor Actual en Materias Primas (Q)'])
+    for cell in ws_resumen[1]:
         cell.fill = fill_gris
         cell.font = bold_font
         cell.border = border
         cell.alignment = alignment_center
 
-    for idx, mat in enumerate(materiales_kardex, 1):
-        row = [
-            idx,
-            mat['nombre'],
-            mat['tipo_material'],
-            mat['ini_cant'],
-            mat['ini_costo'],
-            mat['ini_total'],
-            mat['ing_cant'],
-            mat['ing_costo'],
-            mat['ing_total'],
-            mat['sal_cant'],
-            mat['sal_costo'],
-            mat['sal_total'],
-            mat['fin_cant'],
-            mat['fin_costo'],
-            mat['fin_total']
-        ]
-        ws_kardex.append(row)
+    total_general = {'ing_cant': 0.0, 'ing_total': 0.0, 'sal_cant': 0.0, 'sal_total': 0.0, 'fin_cant': 0.0, 'fin_total': 0.0}
+    for letra in INVENTARIOS:
+        t = datos_por_inventario[letra]['totales']
+        ws_resumen.append([f"Inventario {letra}", t['ing_cant'], t['ing_total'], t['sal_cant'], t['sal_total'], t['fin_cant'], t['fin_total']])
+        for clave in total_general:
+            total_general[clave] += t[clave]
 
-    for row in ws_kardex.iter_rows(min_row=2, max_row=ws_kardex.max_row):
+    ws_resumen.append(['TOTAL GENERAL', total_general['ing_cant'], total_general['ing_total'], total_general['sal_cant'], total_general['sal_total'], total_general['fin_cant'], total_general['fin_total']])
+
+    fila_total_resumen = ws_resumen.max_row
+    for row in ws_resumen.iter_rows(min_row=2, max_row=ws_resumen.max_row):
+        es_total = row[0].row == fila_total_resumen
         for col_num, cell in enumerate(row, 1):
             cell.border = border
-            if col_num in {4, 5, 6}:
-                cell.fill = fill_amarillo
-            elif col_num in {7, 8, 9}:
-                cell.fill = fill_verde
-            elif col_num in {10, 11, 12}:
-                cell.fill = fill_azul
-            elif col_num in {13, 14, 15}:
-                cell.fill = fill_naranja
-
             if col_num == 1:
-                cell.alignment = alignment_center
-            elif col_num in {4, 7, 10, 13}:
-                cell.number_format = '#,##0'
+                cell.alignment = Alignment(horizontal='left', vertical='center')
             else:
                 cell.number_format = '#,##0.00'
+                cell.alignment = alignment_right
+            if es_total:
+                cell.font = bold_font
+                cell.fill = fill_total
 
-    ws_kardex.freeze_panes = 'A2'
-    ws_kardex.auto_filter.ref = ws_kardex.dimensions
+    _autoajustar_columnas(ws_resumen)
 
-    for col in ws_kardex.columns:
-        max_length = 0
-        column_letter = col[0].column_letter
-        for cell in col:
-            try:
-                if len(str(cell.value)) > max_length:
-                    max_length = len(str(cell.value))
-            except Exception:
-                pass
-        ws_kardex.column_dimensions[column_letter].width = min(max_length + 2, 40)
+    # --- UNA HOJA POR INVENTARIO CON EL DETALLE DEL KARDEX ---
+    headers = [
+        'No.', 'Código', 'Nombre', 'Grupo',
+        'Inicial Cant.', 'Inicial Costo', 'Inicial Total',
+        'Entradas Cant.', 'Entradas Costo', 'Entradas Total',
+        'Salidas Cant.', 'Salidas Costo', 'Salidas Total',
+        'Actual Cant.', 'Actual Costo', 'Actual Total'
+    ]
+
+    for letra in INVENTARIOS:
+        materiales_kardex = datos_por_inventario[letra]['materiales']
+        totales = datos_por_inventario[letra]['totales']
+
+        ws_kardex = wb.create_sheet(title=f"Kardex {letra}")
+        ws_kardex.append(headers)
+        for cell in ws_kardex[1]:
+            cell.fill = fill_gris
+            cell.font = bold_font
+            cell.border = border
+            cell.alignment = alignment_center
+
+        for idx, mat in enumerate(materiales_kardex, 1):
+            ws_kardex.append([
+                idx, mat['codigo'] or '', mat['nombre'], mat['tipo_material'],
+                mat['ini_cant'], mat['ini_costo'], mat['ini_total'],
+                mat['ing_cant'], mat['ing_costo'], mat['ing_total'],
+                mat['sal_cant'], mat['sal_costo'], mat['sal_total'],
+                mat['fin_cant'], mat['fin_costo'], mat['fin_total']
+            ])
+
+        # Fila de totales generales de este inventario
+        ws_kardex.append([
+            '', '', 'TOTAL GENERAL', '',
+            totales['ini_cant'], '', totales['ini_total'],
+            totales['ing_cant'], '', totales['ing_total'],
+            totales['sal_cant'], '', totales['sal_total'],
+            totales['fin_cant'], '', totales['fin_total']
+        ])
+        fila_total = ws_kardex.max_row
+
+        for row in ws_kardex.iter_rows(min_row=2, max_row=ws_kardex.max_row):
+            es_total = row[0].row == fila_total
+            for col_num, cell in enumerate(row, 1):
+                cell.border = border
+                if col_num in {5, 6, 7}:
+                    cell.fill = fill_amarillo
+                elif col_num in {8, 9, 10}:
+                    cell.fill = fill_verde
+                elif col_num in {11, 12, 13}:
+                    cell.fill = fill_azul
+                elif col_num in {14, 15, 16}:
+                    cell.fill = fill_naranja
+
+                if col_num == 1:
+                    cell.alignment = alignment_center
+                elif col_num >= 5:
+                    cell.number_format = '#,##0.00'
+
+                if es_total:
+                    cell.font = bold_font
+                    if col_num in (1, 2, 4, 6, 9, 12, 15):
+                        cell.fill = fill_total
+
+        ws_kardex.freeze_panes = 'A2'
+        ws_kardex.auto_filter.ref = ws_kardex.dimensions
+        _autoajustar_columnas(ws_kardex)
 
     output = BytesIO()
     wb.save(output)
@@ -221,7 +274,9 @@ def cargar_excel():
                 rows_imported = 0
                 rows_skipped = 0
 
-                inventario_actual = obtener_inventario_actual()
+                inventario_destino = request.form.get('inventario_destino')
+                if inventario_destino not in INVENTARIOS:
+                    inventario_destino = obtener_inventario_actual()
 
                 sql_insert = '''
                     INSERT INTO materiales (nombre, descripcion, tipo_material, numero_metrico, origen, fuente, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, drive_link, inventario, codigo)
@@ -264,7 +319,7 @@ def cargar_excel():
                         precio_unitario = float(precio_unitario_raw)
 
                         codigo = str(codigo_raw).strip() if codigo_raw not in (None, '') else ''
-                        values_to_insert = (nombre, descripcion, tipo_material, numero_metrico, origen, fuente, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, '', inventario_actual, codigo)
+                        values_to_insert = (nombre, descripcion, tipo_material, numero_metrico, origen, fuente, empresa, presentacion, unidad, cantidad_inicial, precio_unitario, '', inventario_destino, codigo)
                         cursor.execute(sql_insert, values_to_insert)
                         rows_imported += 1
 
@@ -276,7 +331,7 @@ def cargar_excel():
                 cursor.close()
                 conn.close()
 
-                flash_message = f"Éxito: Carga completada. Se importaron {rows_imported} materiales al Inventario {inventario_actual}."
+                flash_message = f"Éxito: Carga completada. Se importaron {rows_imported} materiales al Inventario {inventario_destino}."
                 if rows_skipped > 0:
                     flash_message += f" Se omitieron {rows_skipped} filas por datos faltantes o formato incorrecto."
                 flash(flash_message, "success")
@@ -286,3 +341,143 @@ def cargar_excel():
             return redirect(url_for('inventario_bp.inventario'))
 
     return render_template('carga_masiva.html')
+
+
+@excel_bp.route('/exportar_actualizacion_materiales')
+def exportar_actualizacion_materiales():
+    """Plantilla para renombrar materiales existentes y asignarles código, sin
+    tocar su descripción ni sus movimientos (se actualiza por ID, no se
+    borra/recrea el material)."""
+    inventario_sel = request.args.get('inventario')
+    if inventario_sel not in INVENTARIOS:
+        inventario_sel = obtener_inventario_actual()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, codigo, nombre, descripcion FROM materiales WHERE inventario = ? ORDER BY nombre ASC', (inventario_sel,))
+    materiales = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"Actualizar {inventario_sel}"
+
+    fill_hdr = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+    fill_id = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+    font_hdr = Font(color="475569", bold=True)
+    font_gris = Font(color="94A3B8")
+    alignment_left = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    border_thin = Border(left=Side(style='thin', color='E2E8F0'), right=Side(style='thin', color='E2E8F0'),
+                         top=Side(style='thin', color='E2E8F0'), bottom=Side(style='thin', color='E2E8F0'))
+
+    headers = ['ID (no modificar)', 'Código', 'Nombre', 'Descripción actual (referencia, no se modifica)']
+    ws.append(headers)
+    for cell in ws[1]:
+        cell.fill = fill_hdr
+        cell.font = font_hdr
+        cell.alignment = alignment_left
+        cell.border = border_thin
+
+    for mat in materiales:
+        ws.append([mat['id'], mat['codigo'] or '', mat['nombre'], mat['descripcion'] or ''])
+        fila = ws[ws.max_row]
+        for cell in fila:
+            cell.alignment = alignment_left
+            cell.border = border_thin
+        fila[0].fill = fill_id
+        fila[0].font = font_gris
+        fila[3].font = font_gris
+
+    for col in ws.columns:
+        max_length = 0
+        for cell in col:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except Exception:
+                pass
+        ws.column_dimensions[col[0].column_letter].width = min(max_length + 2, 50)
+
+    output = BytesIO()
+    wb.save(output)
+
+    return Response(
+        output.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': f'attachment; filename=Actualizar_Nombres_Codigos_Inventario_{inventario_sel}.xlsx'}
+    )
+
+
+@excel_bp.route('/actualizar_materiales_masivo', methods=['POST'])
+def actualizar_materiales_masivo():
+    """Carga masiva de SOLO nombre y código para materiales que ya existen
+    (identificados por ID). No toca descripción, ni ningún otro campo, ni los
+    movimientos del material, porque es un UPDATE sobre el mismo registro."""
+    if 'archivo_excel' not in request.files:
+        flash('Error: No se encontró el archivo en la solicitud.', 'error')
+        return redirect(url_for('excel_bp.cargar_excel'))
+
+    file = request.files['archivo_excel']
+    if file.filename == '':
+        flash('Error: No se seleccionó ningún archivo.', 'error')
+        return redirect(url_for('excel_bp.cargar_excel'))
+
+    if not file.filename.endswith('.xlsx'):
+        flash('Error: El archivo debe ser un Excel (.xlsx).', 'error')
+        return redirect(url_for('excel_bp.cargar_excel'))
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        workbook = openpyxl.load_workbook(file)
+        sheet = workbook.active
+
+        rows_processed = 0
+        rows_updated = 0
+        rows_skipped = 0
+
+        for row in sheet.iter_rows(min_row=2, values_only=True):
+            rows_processed += 1
+            try:
+                if not row or len(row) < 3:
+                    rows_skipped += 1
+                    continue
+
+                id_raw, codigo_raw, nombre_raw = row[0], row[1], row[2]
+
+                if id_raw is None or not nombre_raw:
+                    rows_skipped += 1
+                    continue
+
+                material_id = int(id_raw)
+                nombre = str(nombre_raw).strip()
+                codigo = str(codigo_raw).strip() if codigo_raw not in (None, '') else ''
+
+                if not nombre:
+                    rows_skipped += 1
+                    continue
+
+                cursor.execute('UPDATE materiales SET nombre = ?, codigo = ? WHERE id = ?', (nombre, codigo, material_id))
+                if cursor.rowcount == 0:
+                    rows_skipped += 1
+                else:
+                    rows_updated += 1
+
+            except (ValueError, TypeError):
+                rows_skipped += 1
+                continue
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        flash_message = f"Éxito: Se actualizó el nombre y código de {rows_updated} materiales. Descripción y movimientos no se modificaron."
+        if rows_skipped > 0:
+            flash_message += f" Se omitieron {rows_skipped} filas por ID inválido o nombre vacío."
+        flash(flash_message, "success")
+
+    except Exception as e:
+        flash(f"Error: Ocurrió un problema al procesar el archivo Excel: {e}", "error")
+
+    return redirect(url_for('inventario_bp.inventario'))

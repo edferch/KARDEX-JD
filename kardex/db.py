@@ -37,7 +37,8 @@ def init_db():
             departamento TEXT, solicitante TEXT
         );
         CREATE TABLE IF NOT EXISTS ips_autorizadas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, ip_direccion TEXT NOT NULL, descripcion TEXT
+            id INTEGER PRIMARY KEY AUTOINCREMENT, ip_direccion TEXT NOT NULL, descripcion TEXT,
+            tipo TEXT NOT NULL DEFAULT 'kardex'
         );
     ''')
 
@@ -46,6 +47,11 @@ def init_db():
         conn.execute('ALTER TABLE materiales ADD COLUMN codigo TEXT')
     if 'inventario' not in columnas_materiales:
         conn.execute("ALTER TABLE materiales ADD COLUMN inventario TEXT NOT NULL DEFAULT 'A'")
+
+    columnas_ips = [fila['name'] for fila in conn.execute('PRAGMA table_info(ips_autorizadas)').fetchall()]
+    if 'tipo' not in columnas_ips:
+        # Las IPs ya autorizadas antes de este cambio conservan acceso al Kardex completo.
+        conn.execute("ALTER TABLE ips_autorizadas ADD COLUMN tipo TEXT NOT NULL DEFAULT 'kardex'")
 
     conn.commit()
     conn.close()

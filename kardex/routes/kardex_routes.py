@@ -6,7 +6,7 @@ from flask import Blueprint, request, redirect, url_for, render_template, sessio
 
 from ..db import get_db_connection
 from ..inventarios import INVENTARIOS, obtener_inventario_actual
-from ..logic import es_ip_autorizada, preparar_datos_kardex
+from ..logic import ip_autorizada_kardex, ip_autorizada_quote, preparar_datos_kardex
 
 kardex_bp = Blueprint('kardex_bp', __name__)
 
@@ -22,8 +22,10 @@ def cambiar_inventario(letra):
 
 @kardex_bp.route('/')
 def index():
-    if es_ip_autorizada():
+    if ip_autorizada_kardex():
         return _renderizar_kardex_completo()
+    elif ip_autorizada_quote():
+        return redirect(url_for('consultas_bp.quote'))
     else:
         return redirect(url_for('consultas_bp.consultor'))
 

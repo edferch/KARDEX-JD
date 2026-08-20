@@ -135,6 +135,8 @@ nav a:hover { background-color: #f1f5f9; color: #2563eb; transform: translateY(-
 .badge-tipo { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
 .badge-entrada { background-color: #d1fae5; color: #065f46; }
 .badge-salida { background-color: #fee2e2; color: #991b1b; }
+.badge-kardex { background-color: #e0e7ff; color: #4338ca; }
+.badge-quote { background-color: #cffafe; color: #0e7490; }
 
 .mov-acciones { display: flex; gap: 6px; white-space: nowrap; }
 .mov-acciones button { padding: 5px 9px; font-size: 12px; margin: 0; box-shadow: none; border-radius: 6px; }

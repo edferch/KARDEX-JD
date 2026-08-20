@@ -84,8 +84,8 @@
                             <strong>{{ mat['nombre'] }}</strong>
                         {% endif %}
                     </td>
-                    <td>{{ mat['stock_actual'] }}</td>
-                    <td>Q {{ "%.2f"|format(mat['costo_promedio_actual']) }}</td>
+                    <td>{{ "{:,.2f}".format(mat['stock_actual']) }}</td>
+                    <td>Q {{ "{:,.2f}".format(mat['costo_promedio_actual']) }}</td>
                 </tr>
                 <tr class="fila-detalle" id="detalle-{{ mat['id'] }}" style="display: none;">
                     <td colspan="5">

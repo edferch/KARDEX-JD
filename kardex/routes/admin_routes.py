@@ -58,8 +58,11 @@ def admin():
                 flash("Error: La fuente ya existe.", "error")
 
         elif accion == 'agregar_ip':
-            cursor.execute('INSERT INTO ips_autorizadas (ip_direccion, descripcion) VALUES (?, ?)',
-                           (request.form['nueva_ip'], request.form['desc_ip']))
+            tipo_ip = request.form.get('tipo_ip', 'kardex')
+            if tipo_ip not in ('kardex', 'quote'):
+                tipo_ip = 'kardex'
+            cursor.execute('INSERT INTO ips_autorizadas (ip_direccion, descripcion, tipo) VALUES (?, ?, ?)',
+                           (request.form['nueva_ip'], request.form['desc_ip'], tipo_ip))
             conn.commit()
             flash("IP agregada a la lista blanca.", "success")
 
@@ -78,7 +81,7 @@ def admin():
     cursor.execute('SELECT id, nombre FROM materiales WHERE inventario = ? ORDER BY nombre ASC', (obtener_inventario_actual(),))
     materiales = cursor.fetchall()
 
-    cursor.execute('SELECT * FROM ips_autorizadas ORDER BY id DESC')
+    cursor.execute('SELECT * FROM ips_autorizadas ORDER BY tipo ASC, id DESC')
     ips = cursor.fetchall()
 
     cursor.close()

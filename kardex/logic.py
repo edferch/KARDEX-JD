@@ -7,15 +7,26 @@ from .db import get_db_connection
 from .inventarios import obtener_inventario_actual
 
 
-def es_ip_autorizada():
+def _ip_autorizada_para(tipo):
     ip_cliente = request.remote_addr
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT 1 FROM ips_autorizadas WHERE ip_direccion = ?', (ip_cliente,))
+    cursor.execute('SELECT 1 FROM ips_autorizadas WHERE ip_direccion = ? AND tipo = ?', (ip_cliente, tipo))
     autorizada = cursor.fetchone() is not None
     cursor.close()
     conn.close()
     return autorizada
+
+
+def ip_autorizada_kardex():
+    """IPs autorizadas para ver el Kardex completo (acceso total)."""
+    return _ip_autorizada_para('kardex')
+
+
+def ip_autorizada_quote():
+    """IPs autorizadas para ver la pantalla de Quote. Quien tiene acceso al
+    Kardex también puede ver Quote."""
+    return ip_autorizada_kardex() or _ip_autorizada_para('quote')
 
 
 def preparar_datos_kardex(materiales_db, movimientos_por_material, mes_filtro):

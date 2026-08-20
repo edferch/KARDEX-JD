@@ -1,16 +1,19 @@
 """Vistas de solo consulta: Quote (para cotizaciones) y Consultor de stock
 (pantalla pública para IPs no autorizadas)."""
-from flask import Blueprint, render_template
+from flask import Blueprint, redirect, url_for, render_template
 
 from ..db import get_db_connection
 from ..inventarios import obtener_inventario_actual
-from ..logic import obtener_materiales_con_stock
+from ..logic import ip_autorizada_quote, obtener_materiales_con_stock
 
 consultas_bp = Blueprint('consultas_bp', __name__)
 
 
 @consultas_bp.route('/quote')
 def quote():
+    if not ip_autorizada_quote():
+        return redirect(url_for('consultas_bp.consultor'))
+
     conn = get_db_connection()
     cursor = conn.cursor()
     materiales = obtener_materiales_con_stock(cursor)
