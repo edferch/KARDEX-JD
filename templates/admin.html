@@ -187,7 +187,7 @@
                 <p style="color: #64748b; font-size: 13px; margin-top: 0;">Descarga la plantilla para preparar tus datos, o súbela ya llena para actualizar el inventario en lote.</p>
                 <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 20px;">
                     <a href="/exportar_inventario" class="btn" style="background-color: #059669; text-align: center;">📥 Descargar Plantilla</a>
-                    <a href="{{ url_for('cargar_excel') }}" class="btn" style="background-color: #10b981; text-align: center;">📤 Carga Masiva</a>
+                    <a href="{{ url_for('excel_bp.cargar_excel') }}" class="btn" style="background-color: #10b981; text-align: center;">📤 Carga Masiva</a>
                 </div>
             </div>
 
@@ -266,7 +266,11 @@
 
             <div class="card" style="grid-column: 1 / -1;">
                 <h3 style="margin-top: 0; color: #1e293b; border-bottom: 2px solid #06b6d4; padding-bottom: 10px;">🌐 IPs Autorizadas</h3>
-                <p style="color: #64748b; font-size: 13px; margin-top: 0;">Solo los equipos con una IP en esta lista pueden ver el Kardex completo; el resto se redirige a la vista de consulta.</p>
+                <p style="color: #64748b; font-size: 13px; margin-top: 0;">
+                    Solo los equipos con una IP autorizada para <strong>Kardex</strong> pueden ver el Kardex completo (y también Quote).
+                    Los autorizados solo para <strong>Quote</strong> ven esa pantalla directamente.
+                    El resto se redirige a Consultor.
+                </p>
 
                 <form method="POST" action="/admin" autocomplete="off" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; margin-bottom: 20px;">
                     <input type="hidden" name="accion" value="agregar_ip">
@@ -277,6 +281,13 @@
                     <div class="form-grupo" style="margin-bottom: 0;">
                         <label>Descripción:</label>
                         <input type="text" name="desc_ip" placeholder="Ej: PC Contador" required>
+                    </div>
+                    <div class="form-grupo" style="margin-bottom: 0;">
+                        <label>Acceso a:</label>
+                        <select name="tipo_ip" required>
+                            <option value="kardex">Kardex (acceso completo)</option>
+                            <option value="quote">Quote (solo cotización)</option>
+                        </select>
                     </div>
                     <button type="submit" class="btn" style="height: 42px; margin-top: auto;">Autorizar IP</button>
                 </form>
@@ -289,6 +300,7 @@
                             <tr style="background-color: #f8fafc; text-align: left;">
                                 <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Dirección IP</th>
                                 <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Descripción</th>
+                                <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Acceso</th>
                                 <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; width: 40px;"></th>
                             </tr>
                         </thead>
@@ -297,13 +309,16 @@
                             <tr>
                                 <td style="padding: 8px; border-bottom: 1px solid #f1f5f9;"><strong>{{ ip['ip_direccion'] }}</strong></td>
                                 <td style="padding: 8px; border-bottom: 1px solid #f1f5f9; color: #64748b;">{{ ip['descripcion'] }}</td>
+                                <td style="padding: 8px; border-bottom: 1px solid #f1f5f9;">
+                                    <span class="badge-tipo {{ 'badge-kardex' if ip['tipo'] == 'kardex' else 'badge-quote' }}">{{ 'Kardex' if ip['tipo'] == 'kardex' else 'Quote' }}</span>
+                                </td>
                                 <td style="padding: 8px; border-bottom: 1px solid #f1f5f9; text-align: right;">
                                     <button type="button" class="btn btn-salida" style="padding: 4px 8px; font-size: 12px; margin: 0; box-shadow: none;" onclick="confirmarEliminacionAdmin('/eliminar_ip/{{ ip['id'] }}')" title="Eliminar IP">🗑️</button>
                                 </td>
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="3" style="padding: 10px; text-align: center; color: #7f8c8d;">No hay IPs registradas todavía.</td>
+                                <td colspan="4" style="padding: 10px; text-align: center; color: #7f8c8d;">No hay IPs registradas todavía.</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -551,8 +566,8 @@
                 html += '<td>' + escaparHtml(m.fecha) + '</td>';
                 html += '<td>' + escaparHtml(m.material_nombre) + '</td>';
                 html += '<td><span class="badge-tipo ' + badgeClase + '">' + badgeTexto + '</span></td>';
-                html += '<td>' + Number(m.cantidad).toLocaleString() + ' ' + escaparHtml(m.material_unidad || '') + '</td>';
-                html += '<td>Q ' + Number(m.precio_unitario).toFixed(4) + '</td>';
+                html += '<td>' + Number(m.cantidad).toFixed(2) + ' ' + escaparHtml(m.material_unidad || '') + '</td>';
+                html += '<td>Q ' + Number(m.precio_unitario).toFixed(2) + '</td>';
                 html += '<td>' + docInfo + '</td>';
                 html += '<td>' + escaparHtml(m.numero_documento) + '</td>';
                 html += '<td class="mov-acciones">';

@@ -5,12 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KARDEX JD</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="{{ url_for('static', filename='buscador-material.js') }}"></script>
 </head>
 <body>
     <header>
         <h1>KARDEX JD</h1>
     </header>
-    
+
+    <div class="inv-switcher-bar">
+        <span class="inv-switcher-label">📦 Viendo:</span>
+        <div class="inv-switcher">
+            {% for letra in inventarios_disponibles %}
+            <a href="{{ url_for('kardex_bp.cambiar_inventario', letra=letra, next=request.path) }}" class="inv-switcher-btn {{ 'activo' if inventario_actual == letra else '' }}">Inventario {{ letra }}</a>
+            {% endfor %}
+        </div>
+    </div>
+
     <nav>
         <a href="/">Inicio</a>
         <a href="/reporte">Reportes</a>
