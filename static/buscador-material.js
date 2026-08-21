@@ -1,5 +1,8 @@
 // static/buscador-material.js
-// Buscador de materiales con desplegable propio (código, nombre y descripción).
+// Buscador de materiales: se puede encontrar un material escribiendo su código,
+// nombre o descripción, pero SOLO el código se muestra (en el desplegable de
+// resultados y en el valor final seleccionado) — el nombre nunca se le muestra
+// al personal, solo sirve internamente para poder buscar.
 // Se usa en el index (modales de Entrada/Devolución/Salida) y en Reportes.
 
 function normalizarBusquedaMaterial(texto) {
@@ -43,8 +46,6 @@ function crearBuscadorMaterial(inputId, hiddenId, dropdownId, opciones) {
         dropdown.innerHTML = resultados.map(function(mat, i) {
             return '<div class="dropdown-materiales-item' + (i === indiceActivo ? ' activo' : '') + '" data-index="' + i + '">' +
                 '<span class="dropdown-materiales-codigo">' + (mat.codigo ? escaparHtmlMaterial(mat.codigo) : 'S/C') + '</span>' +
-                '<span class="dropdown-materiales-nombre">' + escaparHtmlMaterial(mat.nombre) + '</span>' +
-                (mat.descripcion ? '<span class="dropdown-materiales-desc">' + escaparHtmlMaterial(mat.descripcion) + '</span>' : '') +
                 '</div>';
         }).join('');
         dropdown.style.display = 'block';
@@ -64,7 +65,7 @@ function crearBuscadorMaterial(inputId, hiddenId, dropdownId, opciones) {
 
     function seleccionarMaterial(mat) {
         hidden.value = mat.id;
-        input.value = (mat.codigo ? mat.codigo + ' - ' : '') + mat.nombre;
+        input.value = mat.codigo || 'S/C';
         input.setCustomValidity("");
         cerrarDropdown();
         if (typeof onSeleccionar === 'function') onSeleccionar(mat);

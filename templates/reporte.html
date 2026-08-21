@@ -16,7 +16,7 @@
                     <label>Producto / Material:</label>
                     <div class="buscador-material">
                         <input type="text" id="busquedaMaterialReporte" class="input-buscador-material" placeholder="Escriba código, nombre o descripción..." autocomplete="off" required
-                        {% if reporte_datos %} value="{{ (reporte_datos.material['codigo'] + ' - ') if reporte_datos.material['codigo'] else '' }}{{ reporte_datos.material['nombre'] }}" {% endif %}>
+                        {% if reporte_datos %} value="{{ reporte_datos.material['codigo'] or 'S/C' }}" {% endif %}>
                         <input type="hidden" name="material_id" id="hiddenMaterial_reporte" value="{{ selected_material_id or '' }}" required>
                         <div class="dropdown-materiales" id="dropdownMaterialReporte"></div>
                     </div>
@@ -42,7 +42,7 @@
         {% if reporte_datos %}
         <div style="background-color: white; border-radius: 12px; padding: 25px; margin-bottom: 30px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
             <h3 style="color: #1e293b; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; margin-top: 0; font-size: 20px;">
-                📦 {{ reporte_datos.material['nombre'] }} <span style="font-size: 14px; color: #64748b; font-weight: normal;">| Código: {{ reporte_datos.material['codigo'] or '-' }} | Grupo: {{ reporte_datos.material['tipo_material'] }} | Unidad: {{ reporte_datos.material['unidad'] }}</span>
+                📦 {{ reporte_datos.material['codigo'] or '-' }} — {{ reporte_datos.material['descripcion'] or 'Sin descripción' }} <span style="font-size: 14px; color: #64748b; font-weight: normal;">| Grupo: {{ reporte_datos.material['tipo_material'] }} | Unidad: {{ reporte_datos.material['unidad'] }}</span>
             </h3>
 
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px;">
@@ -162,7 +162,7 @@
                             <tr>
                                 <th class="hdr-gris col-texto">Fecha</th>
                                 <th class="hdr-gris col-texto">Código</th>
-                                <th class="hdr-gris col-texto">Material</th>
+                                <th class="hdr-gris col-texto">Descripción</th>
                                 <th class="hdr-gris col-texto">Tipo</th>
                                 <th class="hdr-gris col-texto">Documento</th>
                                 <th class="hdr-gris col-texto">Núm. Documento</th>
@@ -176,7 +176,7 @@
                             <tr>
                                 <td class="col-texto" style="white-space: nowrap;">{{ r.fecha }}</td>
                                 <td class="col-texto">{{ r.material_codigo or '' }}</td>
-                                <td class="col-texto"><strong>{{ r.material_nombre }}</strong></td>
+                                <td class="col-texto">{{ r.material_descripcion or 'Sin descripción' }}</td>
                                 <td class="col-texto">
                                     <span class="badge-tipo {{ 'badge-entrada' if r.tipo == 'entrada' else 'badge-salida' }}">{{ 'Entrada' if r.tipo == 'entrada' else 'Salida' }}</span>
                                 </td>

@@ -6,6 +6,7 @@ from flask import Blueprint, request, render_template
 
 from ..db import get_db_connection
 from ..inventarios import obtener_inventario_actual
+from ..logic import aplicar_movimiento
 
 reportes_bp = Blueprint('reportes_bp', __name__)
 
@@ -54,15 +55,7 @@ def reporte():
                 movs_actuales = movimientos
 
             for mov in movs_anteriores:
-                if mov['tipo'] == 'entrada':
-                    costo_movimiento = mov['cantidad'] * mov['precio_unitario']
-                    cant_saldo += mov['cantidad']
-                    total_saldo += costo_movimiento
-                    if cant_saldo > 0: precio_promedio = total_saldo / cant_saldo
-                elif mov['tipo'] == 'salida':
-                    costo_movimiento = mov['cantidad'] * precio_promedio
-                    cant_saldo -= mov['cantidad']
-                    total_saldo -= costo_movimiento
+                cant_saldo, precio_promedio, total_saldo, _ = aplicar_movimiento(cant_saldo, precio_promedio, total_saldo, mov)
 
             filas_kardex = []
             # Primera fila: El saldo inicial o anterior según el filtro
@@ -84,13 +77,9 @@ def reporte():
                 elif mov['documento']:
                     doc_info = f" ({mov['documento']})"
 
-                if mov['tipo'] == 'entrada':
-                    costo_movimiento = mov['cantidad'] * mov['precio_unitario']
-                    cant_saldo += mov['cantidad']
-                    total_saldo += costo_movimiento
-                    if cant_saldo > 0:
-                        precio_promedio = total_saldo / cant_saldo
+                cant_saldo, precio_promedio, total_saldo, costo_movimiento = aplicar_movimiento(cant_saldo, precio_promedio, total_saldo, mov)
 
+                if mov['tipo'] == 'entrada':
                     filas_kardex.append({
                         'fecha': mov['fecha'], 'detalle': f"Entrada / Compra{doc_info}",
                         'ing_cant': mov['cantidad'], 'ing_costo': mov['precio_unitario'], 'ing_total': costo_movimiento,
@@ -98,10 +87,6 @@ def reporte():
                         'saldo_cant': cant_saldo, 'saldo_costo': precio_promedio, 'saldo_total': total_saldo
                     })
                 elif mov['tipo'] == 'salida':
-                    costo_movimiento = mov['cantidad'] * precio_promedio
-                    cant_saldo -= mov['cantidad']
-                    total_saldo -= costo_movimiento
-
                     filas_kardex.append({
                         'fecha': mov['fecha'], 'detalle': f"Salida / Egreso{doc_info}",
                         'ing_cant': '', 'ing_costo': '', 'ing_total': '',
@@ -114,7 +99,7 @@ def reporte():
     resultados_orden = None
     if orden_busqueda:
         cursor.execute('''
-            SELECT mov.*, mat.nombre AS material_nombre, mat.codigo AS material_codigo
+            SELECT mov.*, mat.codigo AS material_codigo, mat.descripcion AS material_descripcion
             FROM movimientos mov
             JOIN materiales mat ON mat.id = mov.material_id
             WHERE mat.inventario = ? AND (mov.numero_documento LIKE ? OR mov.documento LIKE ?)

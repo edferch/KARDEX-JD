@@ -29,6 +29,30 @@ def ip_autorizada_quote():
     return ip_autorizada_kardex() or _ip_autorizada_para('quote')
 
 
+def aplicar_movimiento(cant_saldo, precio_promedio, total_saldo, mov):
+    """Aplica UN movimiento (entrada o salida) a un saldo corrido, usando costeo
+    promedio ponderado (Kardex). Es el único lugar del código donde vive esta
+    fórmula: tanto el Kardex del index como el Reporte por material la llaman,
+    para que sus cifras nunca puedan divergir entre pantallas.
+
+    Devuelve (cant_saldo, precio_promedio, total_saldo, costo_del_movimiento).
+    """
+    cantidad = float(mov['cantidad'])
+    if mov['tipo'] == 'entrada':
+        costo_movimiento = cantidad * float(mov['precio_unitario'])
+        cant_saldo += cantidad
+        total_saldo += costo_movimiento
+        if cant_saldo > 0:
+            precio_promedio = total_saldo / cant_saldo
+    elif mov['tipo'] == 'salida':
+        costo_movimiento = cantidad * precio_promedio
+        cant_saldo -= cantidad
+        total_saldo -= costo_movimiento
+    else:
+        costo_movimiento = 0.0
+    return cant_saldo, precio_promedio, total_saldo, costo_movimiento
+
+
 def preparar_datos_kardex(materiales_db, movimientos_por_material, mes_filtro):
     materiales_kardex = []
     alertas_rojas = []
@@ -56,16 +80,7 @@ def preparar_datos_kardex(materiales_db, movimientos_por_material, mes_filtro):
             movs_actuales = movimientos
 
         for mov in movs_anteriores:
-            if mov['tipo'] == 'entrada':
-                costo_movimiento = float(mov['cantidad']) * float(mov['precio_unitario'])
-                cant_saldo += float(mov['cantidad'])
-                total_saldo += costo_movimiento
-                if cant_saldo > 0:
-                    precio_promedio = total_saldo / cant_saldo
-            elif mov['tipo'] == 'salida':
-                costo_movimiento = float(mov['cantidad']) * precio_promedio
-                cant_saldo -= float(mov['cantidad'])
-                total_saldo -= costo_movimiento
+            cant_saldo, precio_promedio, total_saldo, _ = aplicar_movimiento(cant_saldo, precio_promedio, total_saldo, mov)
 
         ini_cant, ini_costo, ini_total = cant_saldo, precio_promedio, total_saldo
 
@@ -73,25 +88,20 @@ def preparar_datos_kardex(materiales_db, movimientos_por_material, mes_filtro):
         acum_salida_cant, acum_salida_total = 0.0, 0.0
 
         for mov in movs_actuales:
+            cant_saldo, precio_promedio, total_saldo, costo_movimiento = aplicar_movimiento(cant_saldo, precio_promedio, total_saldo, mov)
             if mov['tipo'] == 'entrada':
-                costo_movimiento = float(mov['cantidad']) * float(mov['precio_unitario'])
-                cant_saldo += float(mov['cantidad'])
-                total_saldo += costo_movimiento
                 acum_ingreso_cant += float(mov['cantidad'])
                 acum_ingreso_total += costo_movimiento
-                if cant_saldo > 0:
-                    precio_promedio = total_saldo / cant_saldo
             elif mov['tipo'] == 'salida':
-                costo_movimiento = float(mov['cantidad']) * precio_promedio
-                cant_saldo -= float(mov['cantidad'])
-                total_saldo -= costo_movimiento
                 acum_salida_cant += float(mov['cantidad'])
                 acum_salida_total += costo_movimiento
 
         avg_ingreso = acum_ingreso_total / acum_ingreso_cant if acum_ingreso_cant > 0 else 0
         avg_salida = acum_salida_total / acum_salida_cant if acum_salida_cant > 0 else 0
 
-        etiqueta_alerta = f"{mat['codigo']} - {mat['nombre']}" if dict(mat).get('codigo') else mat['nombre']
+        # La vista del personal (index) ya no identifica materiales por nombre: se usa
+        # el código, y si el material no tiene código asignado, su descripción.
+        etiqueta_alerta = dict(mat).get('codigo') or dict(mat).get('descripcion') or 'Material sin código'
         if cant_saldo < 2:
             alertas_rojas.append({'nombre': etiqueta_alerta, 'stock': cant_saldo})
         elif cant_saldo < 5:
@@ -125,31 +135,35 @@ def preparar_datos_kardex(materiales_db, movimientos_por_material, mes_filtro):
 
 
 def obtener_materiales_con_stock(cursor):
-    """Calcula stock actual, costo promedio actual y fecha de última entrada por material."""
+    """Calcula stock actual, costo promedio actual y fecha de última entrada por material.
+
+    Reutiliza preparar_datos_kardex (con mes_filtro='todos') para que el costo promedio
+    y el stock coincidan siempre con los que muestra el Kardex del index: antes esta
+    función promediaba el costo de TODO lo que había entrado alguna vez sin descontar
+    las salidas, lo que daba un número distinto al costo promedio ponderado real en
+    cuanto un material tenía más de un precio de compra y alguna salida.
+    """
     cursor.execute('SELECT * FROM materiales WHERE inventario = ? ORDER BY nombre ASC', (obtener_inventario_actual(),))
     materiales_raw = cursor.fetchall()
+
+    movimientos_por_material = {}
+    for mat in materiales_raw:
+        cursor.execute('SELECT * FROM movimientos WHERE material_id = ? ORDER BY fecha ASC, id ASC', (mat['id'],))
+        movimientos_por_material[mat['id']] = cursor.fetchall()
+
+    materiales_kardex, _, _, _ = preparar_datos_kardex(materiales_raw, movimientos_por_material, 'todos')
+    kardex_por_id = {k['id']: k for k in materiales_kardex}
 
     materiales = []
     for mat in materiales_raw:
         m = dict(mat)
+        kardex = kardex_por_id[m['id']]
 
-        cursor.execute('''
-            SELECT
-                SUM(CASE WHEN tipo='entrada' THEN cantidad ELSE -cantidad END) as mov_cant,
-                SUM(CASE WHEN tipo='entrada' THEN (cantidad * precio_unitario) ELSE 0 END) as total_entradas,
-                SUM(CASE WHEN tipo='entrada' THEN cantidad ELSE 0 END) as cant_entradas,
-                MAX(CASE WHEN tipo='entrada' THEN fecha END) as ultima_entrada
-            FROM movimientos WHERE material_id = ?
-        ''', (m['id'],))
-        res = cursor.fetchone()
+        m['stock_actual'] = kardex['fin_cant']
+        m['costo_promedio_actual'] = kardex['fin_costo']
 
-        m['stock_actual'] = m['cantidad_inicial'] + (res['mov_cant'] or 0)
-
-        total_acumulado = (m['cantidad_inicial'] * m['precio_unitario']) + (res['total_entradas'] or 0)
-        total_cantidad = m['cantidad_inicial'] + (res['cant_entradas'] or 0)
-        m['costo_promedio_actual'] = (total_acumulado / total_cantidad) if total_cantidad > 0 else m['precio_unitario']
-
-        m['ultima_entrada'] = res['ultima_entrada']
+        cursor.execute("SELECT MAX(fecha) as ultima_entrada FROM movimientos WHERE material_id = ? AND tipo = 'entrada'", (m['id'],))
+        m['ultima_entrada'] = cursor.fetchone()['ultima_entrada']
 
         materiales.append(m)
 

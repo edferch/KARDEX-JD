@@ -5,7 +5,7 @@
         <h2>Quote - Consulta para Cotización</h2>
         <div style="display: flex; align-items: center; gap: 10px;">
             <div class="buscador-input-wrapper" style="min-width: 300px;">
-                <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Buscar por nombre, código o descripción..." style="padding: 8px 34px 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;">
+                <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Buscar por código o descripción..." style="padding: 8px 34px 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;">
                 <button type="button" class="buscador-clear-btn" id="searchClear" onclick="limpiarBusqueda()" title="Limpiar búsqueda">✕</button>
             </div>
             <span class="buscador-contador" id="searchContador"></span>
@@ -17,7 +17,6 @@
             <thead>
                 <tr>
                     <th class="hdr-gris col-texto">Código</th>
-                    <th class="hdr-gris col-texto">Nombre</th>
                     <th class="hdr-gris col-texto">Descripción</th>
                     <th class="hdr-naranja">Stock</th>
                     <th class="hdr-amarillo">Precio Promedio Actual</th>
@@ -28,19 +27,18 @@
                 {% for mat in materiales %}
                 <tr>
                     <td class="col-texto">{{ mat['codigo'] or '-' }}</td>
-                    <td class="col-texto"><strong>{{ mat['nombre'] }}</strong></td>
-                    <td class="col-texto">{{ mat['descripcion'] or '' }}</td>
+                    <td class="col-texto">{{ mat['descripcion'] or 'Sin descripción' }}</td>
                     <td class="celda-naranja" style="font-size: 16px; font-weight: bold; text-align: center;">{{ "{:,.2f}".format(mat['stock_actual']) }}</td>
                     <td class="celda-amarilla" style="text-align: right;">Q {{ "{:,.2f}".format(mat['costo_promedio_actual']) }}</td>
                     <td class="col-texto">{{ mat['ultima_entrada'] or 'Sin entradas registradas' }}</td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="6" style="padding: 20px; text-align: center; color: #7f8c8d;">No hay materiales para mostrar.</td>
+                    <td colspan="5" style="padding: 20px; text-align: center; color: #7f8c8d;">No hay materiales para mostrar.</td>
                 </tr>
                 {% endfor %}
                 <tr id="no-results" style="display: none;">
-                    <td colspan="6" style="padding: 20px; text-align: center; color: #7f8c8d; background-color: #f8fafc;">
+                    <td colspan="5" style="padding: 20px; text-align: center; color: #7f8c8d; background-color: #f8fafc;">
                         No se encontraron resultados para su búsqueda.
                     </td>
                 </tr>
@@ -71,16 +69,14 @@
                 row.classList.remove('search-highlight');
 
                 const codigoCell = row.getElementsByTagName("td")[0];
-                const nombreCell = row.getElementsByTagName("td")[1];
-                const descCell = row.getElementsByTagName("td")[2];
-                if (!nombreCell) continue; // fila de "no hay materiales"
+                const descCell = row.getElementsByTagName("td")[1];
+                if (!descCell) continue; // fila de "no hay materiales"
 
                 totalRows++;
-                const nombreText = normalizeText(nombreCell ? nombreCell.textContent || nombreCell.innerText : '');
                 const codigoText = normalizeText(codigoCell ? codigoCell.textContent || codigoCell.innerText : '');
                 const descText = normalizeText(descCell ? descCell.textContent || descCell.innerText : '');
 
-                if (filter === '' || nombreText.includes(filter) || codigoText.includes(filter) || descText.includes(filter)) {
+                if (filter === '' || codigoText.includes(filter) || descText.includes(filter)) {
                     row.style.display = "";
                     visibleRows++;
                     if (filter !== '' && !firstMatch) firstMatch = row;
