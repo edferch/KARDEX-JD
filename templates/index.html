@@ -379,8 +379,7 @@
     <script>
         function filterTable() {
             const input = document.getElementById('searchInput');
-            // Normalizamos: quitamos tildes y pasamos a minúsculas
-            const filter = input.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            const filter = input.value;
             const tbody = document.getElementById('tabla-materiales');
             const rows = tbody.getElementsByTagName('tr');
             let visibleRows = 0;
@@ -399,9 +398,8 @@
                 totalRows++;
                 // textContent extrae todo el texto, incluyendo el del span oculto
                 const txtValue = nameCell.textContent || nameCell.innerText;
-                const normalizedText = txtValue.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-                if (normalizedText.includes(filter)) {
+                if (coincideBusquedaInteligente(txtValue, filter)) {
                     rows[i].style.display = "";
                     visibleRows++;
                     if (filter !== '' && !firstMatch) firstMatch = rows[i];

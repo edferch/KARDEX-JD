@@ -1,8 +1,8 @@
 // static/buscador-material.js
 // Buscador de materiales: se puede encontrar un material escribiendo su código,
-// nombre o descripción, pero SOLO el código se muestra (en el desplegable de
-// resultados y en el valor final seleccionado) — el nombre nunca se le muestra
-// al personal, solo sirve internamente para poder buscar.
+// nombre o descripción (en cualquier orden, sin necesidad de escribirlas todas),
+// pero al personal solo se le muestra código + descripción — el nombre nunca se
+// muestra, solo sirve internamente para poder buscar.
 // Se usa en el index (modales de Entrada/Devolución/Salida) y en Reportes.
 
 function normalizarBusquedaMaterial(texto) {
@@ -13,6 +13,17 @@ function escaparHtmlMaterial(texto) {
     const div = document.createElement('div');
     div.textContent = texto == null ? '' : texto;
     return div.innerHTML;
+}
+
+// Búsqueda "inteligente" por palabras: no importa el orden ni que se omitan
+// palabras del texto, basta con que TODAS las palabras escritas aparezcan en
+// alguna parte del texto buscable. Ej.: buscar "bucle 2.500" o "bucle frisezata"
+// encuentra "BUCLE SEDA NM 2.500 MELLO FRISEZATA TOPAZIO".
+function coincideBusquedaInteligente(textoBuscable, consulta) {
+    const tokens = normalizarBusquedaMaterial(consulta).trim().split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) return true;
+    const texto = normalizarBusquedaMaterial(textoBuscable);
+    return tokens.every(function(tok) { return texto.includes(tok); });
 }
 
 function crearBuscadorMaterial(inputId, hiddenId, dropdownId, opciones) {
@@ -46,6 +57,7 @@ function crearBuscadorMaterial(inputId, hiddenId, dropdownId, opciones) {
         dropdown.innerHTML = resultados.map(function(mat, i) {
             return '<div class="dropdown-materiales-item' + (i === indiceActivo ? ' activo' : '') + '" data-index="' + i + '">' +
                 '<span class="dropdown-materiales-codigo">' + (mat.codigo ? escaparHtmlMaterial(mat.codigo) : 'S/C') + '</span>' +
+                '<span class="dropdown-materiales-nombre">' + escaparHtmlMaterial(mat.descripcion || 'Sin descripción') + '</span>' +
                 '</div>';
         }).join('');
         dropdown.style.display = 'block';
@@ -65,7 +77,7 @@ function crearBuscadorMaterial(inputId, hiddenId, dropdownId, opciones) {
 
     function seleccionarMaterial(mat) {
         hidden.value = mat.id;
-        input.value = mat.codigo || 'S/C';
+        input.value = (mat.codigo ? mat.codigo + ' - ' : '') + (mat.descripcion || 'Sin descripción');
         input.setCustomValidity("");
         cerrarDropdown();
         if (typeof onSeleccionar === 'function') onSeleccionar(mat);
@@ -74,14 +86,13 @@ function crearBuscadorMaterial(inputId, hiddenId, dropdownId, opciones) {
     function buscar() {
         hidden.value = '';
         input.setCustomValidity("Debe seleccionar un material de la lista.");
-        const filtro = normalizarBusquedaMaterial(input.value);
+        const filtro = input.value;
 
-        if (filtro === '') { cerrarDropdown(); return; }
+        if (filtro.trim() === '') { cerrarDropdown(); return; }
 
         resultados = materiales.filter(function(mat) {
-            return normalizarBusquedaMaterial(mat.codigo).includes(filtro) ||
-                   normalizarBusquedaMaterial(mat.nombre).includes(filtro) ||
-                   normalizarBusquedaMaterial(mat.descripcion).includes(filtro);
+            const searchable = (mat.codigo || '') + ' ' + (mat.nombre || '') + ' ' + (mat.descripcion || '');
+            return coincideBusquedaInteligente(searchable, filtro);
         }).slice(0, 30);
 
         indiceActivo = -1;

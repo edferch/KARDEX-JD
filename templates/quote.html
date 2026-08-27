@@ -47,14 +47,9 @@
     </div>
 
     <script>
-        function normalizeText(text) {
-            if (!text) return '';
-            return text.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
-        }
-
         function filterTable() {
             const input = document.getElementById('searchInput');
-            const filter = normalizeText(input.value);
+            const filter = input.value.trim();
             const tbody = document.getElementById('tabla-materiales');
             const rows = tbody.getElementsByTagName('tr');
             let visibleRows = 0;
@@ -73,10 +68,11 @@
                 if (!descCell) continue; // fila de "no hay materiales"
 
                 totalRows++;
-                const codigoText = normalizeText(codigoCell ? codigoCell.textContent || codigoCell.innerText : '');
-                const descText = normalizeText(descCell ? descCell.textContent || descCell.innerText : '');
+                const codigoText = codigoCell ? codigoCell.textContent || codigoCell.innerText : '';
+                const descText = descCell ? descCell.textContent || descCell.innerText : '';
 
-                if (filter === '' || codigoText.includes(filter) || descText.includes(filter)) {
+                // Búsqueda inteligente: no importa el orden de las palabras ni que se omitan algunas
+                if (filter === '' || coincideBusquedaInteligente(codigoText + ' ' + descText, filter)) {
                     row.style.display = "";
                     visibleRows++;
                     if (filter !== '' && !firstMatch) firstMatch = row;
