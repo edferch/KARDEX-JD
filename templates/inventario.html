@@ -48,7 +48,7 @@
                 <tr>
                     <th class="hdr-gris" style="width: 40px;"></th>
                     <th class="hdr-gris col-texto">Código</th>
-                    <th class="hdr-gris col-texto">Nombre</th>
+                    <th class="hdr-gris col-texto">Descripción</th>
                     <th class="hdr-gris">Exist. Actual</th>
                     <th class="hdr-gris">Costo Prom. Actual</th>
                 </tr>
@@ -78,10 +78,10 @@
                     <td class="col-texto">
                         {% if mat['drive_link'] %}
                             <a href="{{ mat['drive_link'] }}" target="_blank" title="Abrir enlace de Drive" style="color: #2563eb; text-decoration: none;" onclick="event.stopPropagation();" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
-                                <strong>{{ mat['nombre'] }}</strong>
+                                {{ mat['descripcion'] or 'Sin descripción' }}
                             </a>
                         {% else %}
-                            <strong>{{ mat['nombre'] }}</strong>
+                            {{ mat['descripcion'] or 'Sin descripción' }}
                         {% endif %}
                     </td>
                     <td>{{ "{:,.2f}".format(mat['stock_actual']) }}</td>
@@ -97,7 +97,7 @@
                             <div><span>Proveedor</span><strong>{{ mat['empresa'] or '-' }}</strong></div>
                             <div><span>Presentación</span><strong>{{ mat['presentacion'] or '-' }}</strong></div>
                             <div><span>Unidad</span><strong>{{ mat['unidad'] or '-' }}</strong></div>
-                            <div class="detalle-material-desc"><span>Descripción</span><strong>{{ mat['descripcion'] or '-' }}</strong></div>
+                            <div class="detalle-material-desc"><span>Nombre</span><strong>{{ mat['nombre'] or '-' }}</strong></div>
                         </div>
                     </td>
                 </tr>
@@ -736,14 +736,9 @@
             } catch (e) { alert("Error de conexión al eliminar el proveedor."); }
         }
 
-        function normalizeText(text) {
-            if (!text) return '';
-            return text.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-        }
-
         function filterTable() {
             const input = document.getElementById('searchInput');
-            const filter = normalizeText(input.value);
+            const filter = input.value.trim();
             const tbody = document.getElementById('tabla-materiales');
             const filas = tbody.querySelectorAll('tr.fila-material');
             let visibleRows = 0;
@@ -756,11 +751,13 @@
                 fila.classList.remove('search-highlight');
                 totalRows++;
 
-                // Busca en TODOS los datos del material (código, nombre, descripción, grupo, origen, fuente, proveedor, etc.)
-                const searchable = normalizeText(Object.values(fila.dataset).join(' '));
+                // Búsqueda inteligente en TODOS los datos del material (código, nombre,
+                // descripción, grupo, origen, fuente, proveedor, etc.): no importa el
+                // orden de las palabras ni que se omitan algunas.
+                const searchable = Object.values(fila.dataset).join(' ');
                 const detalle = document.getElementById('detalle-' + fila.dataset.id);
 
-                if (filter === '' || searchable.includes(filter)) {
+                if (filter === '' || coincideBusquedaInteligente(searchable, filter)) {
                     fila.style.display = "";
                     visibleRows++;
                     if (filter !== '' && !firstMatch) firstMatch = fila;

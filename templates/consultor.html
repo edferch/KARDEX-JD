@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Consulta de Stock - KARDEX JD</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="{{ url_for('static', filename='buscador-material.js') }}"></script>
 </head>
 <body>
     <header>
@@ -63,15 +64,9 @@
         </div>
     
         <script>
-            // Función para normalizar texto: quita tildes y convierte a minúsculas
-            function normalizeText(text) {
-                if (!text) return '';
-                return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-            }
-
             function filterTable() {
                 const input = document.getElementById('searchInput');
-                const filter = normalizeText(input.value);
+                const filter = input.value.trim();
                 const tbody = document.getElementById('tabla-materiales');
                 const rows = tbody.getElementsByTagName('tr');
                 let visibleRows = 0;
@@ -107,11 +102,11 @@
                     if (!descCell) continue; // fila de "no hay materiales"
 
                     totalRows++;
-                    const codigoText = normalizeText(codigoCell ? codigoCell.textContent || codigoCell.innerText : '');
-                    const descText = normalizeText(descCell ? descCell.textContent || descCell.innerText : '');
+                    const codigoText = codigoCell ? codigoCell.textContent || codigoCell.innerText : '';
+                    const descText = descCell ? descCell.textContent || descCell.innerText : '';
 
-                    // Usamos .includes() que es más semántico que indexOf > -1
-                    if (codigoText.includes(filter) || descText.includes(filter)) {
+                    // Búsqueda inteligente: no importa el orden de las palabras ni que se omitan algunas
+                    if (coincideBusquedaInteligente(codigoText + ' ' + descText, filter)) {
                         row.style.display = "";
                         visibleRows++;
                         if (!firstMatch) firstMatch = row; // Guardamos la primera fila que coincide

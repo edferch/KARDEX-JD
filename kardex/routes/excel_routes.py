@@ -175,7 +175,7 @@ def exportar_kardex():
 
     # --- UNA HOJA POR INVENTARIO CON EL DETALLE DEL KARDEX ---
     headers = [
-        'No.', 'Código', 'Nombre', 'Grupo',
+        'No.', 'Código', 'Descripción', 'Grupo',
         'Inicial Cant.', 'Inicial Costo', 'Inicial Total',
         'Entradas Cant.', 'Entradas Costo', 'Entradas Total',
         'Salidas Cant.', 'Salidas Costo', 'Salidas Total',
@@ -196,7 +196,7 @@ def exportar_kardex():
 
         for idx, mat in enumerate(materiales_kardex, 1):
             ws_kardex.append([
-                idx, mat['codigo'] or '', mat['nombre'], mat['tipo_material'],
+                idx, mat['codigo'] or '', mat['descripcion'] or '', mat['tipo_material'],
                 mat['ini_cant'], mat['ini_costo'], mat['ini_total'],
                 mat['ing_cant'], mat['ing_costo'], mat['ing_total'],
                 mat['sal_cant'], mat['sal_costo'], mat['sal_total'],
